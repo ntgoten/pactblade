@@ -10,7 +10,7 @@
     },
     "schema_version": 1,
     "uuid": "00373ca2-d586-4206-a135-9d5188d9ed61",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "vocation": {
         "description": {
             "en": "Wields a sword in one hand and eldritch magick in the other. Forgoes the shield."
@@ -22,7 +22,8 @@
             "difficulty": 1,
             "unlock_rank": 1
         },
-        "weapon": "Job01"
+        "weapon": "Job01",
+        "icon": 46
     },
     "vsb_min_version": "0.1.0"
 }
