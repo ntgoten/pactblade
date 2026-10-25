@@ -122,6 +122,13 @@ folder, `reframework/data/VSB/packs/pactblade`, `pak_mods/Pactblade.pak` and `re
 - The chant animations are made for a staff, so the hands are posed for one.
 - Lenient Stagger and Exhaustion: Pactblade triggers Controlled Fall itself; with both installed it may double.
 
+## How it was made
+
+- [docs/PACTBLADE_MODDER_GUIDE.md](docs/PACTBLADE_MODDER_GUIDE.md) - for modders: how the vocation and each skill were built.
+- [docs/PACTBLADE_AI_GUIDE.md](docs/PACTBLADE_AI_GUIDE.md) - the same in compact technical form, for AI coding assistants.
+
+Both are also in the release zip (Pactblade_docs).
+
 ## Credits
 
 - **Capcom** for Dragon's Dogma 2. The effects, animations and most sounds are the game's own, used by ID or as
