@@ -1429,3 +1429,8 @@ Visuals first.
 - 1.0.1 user: Misty Dive on big ones = leave as is (lands on the back a few times). Eldritch Slash wave damage x3 (BLAST.slash.dmgMul 2 -> 3).
 - 1.0.1 user: Guise fire OK (no burning), levitate OK. Slash wave x9 (dmgMul 9), the slash's sword swing x3 (combo.slash.on, calcDamageValue, kind nil).
 - 1.0.1 user: burning without the guise OK (build-up). Guise start/end effect spammed once (1-2 s) - cause unknown (likely the script reset while the guise ran: the decoy without our blocks); not reproduced.
+- 1.0.1 RELEASED 2026-10-25: release/Pactblade-1.0.1.zip (+Fluffy; 1.0 zip kept there for the user to swap), GitHub commit 20a35ed + release v1.0.1 (Latest). README / NEXUS_DESCRIPTION / AI guide updated with a changelog.
+- 1.0.2-test (user: slash wave still ~no damage): wave hits come from its sub-shells (not record.parts) -> kind nil, no x9. Now: no kind + within 4 s of dbg.slashT + attacker GO is a Shell (not me) = 'slash'.
+- 1.0.2-test: user: Blast / Slash ~no damage; hits showed the charged bolt magick 4.5 (was 575) = the sword stayed plain. Suspect: dbg.guardHold stuck (a save_pre without its post). Guard now lets go after 5 s by itself (noted); the sword's magick apply is noted.
+- 1.0.2-test: user's NEW sword got no magick/element in the menu although the master data was set (old sword was fine for all tests) -> the equipped Main StorageData's own _ItemData copy is modified + restored too (swordMod.own), and every refresh ends with a full recalc (EquipData clearParam + calc + applyEquipDataForCharacter(me), dbg.equip_recalc).
+- 1.0.2 user: Eldritch Slash sword x2, wave x3 (x1.5 magick passive on top).

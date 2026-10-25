@@ -4,7 +4,7 @@ A custom vocation for Dragon's Dogma 2: a pact-bound swordsman with a fast, magi
 eldritch magick in the other. No shield. Inspired by the D&D 5e warlock (names only).
 
 Pactblade is built on **Vocation & Skill Builder (VSB)** as a Fighter vocation and runs as a REFramework script.
-Play it as Fighter, or as Warfarer with a sword. Version **1.0.1**.
+Play it as Fighter, or as Warfarer with a sword. Version **1.0.2**.
 
 **Download:** the zip from [Releases](../../releases) - it includes the effect / sound pak, which is not in the source here.
 
@@ -59,7 +59,7 @@ Learned at the Vocation Guild with Discipline (DCP), equipped like any weapon sk
 
 | Skill | Rank | DCP | What it does |
 |---|---|---|---|
-| Eldritch Slash | 1 | 300 | A sweeping arc of eldritch force that cleaves foes from afar (sword hit x3, the wave x9 damage). |
+| Eldritch Slash | 1 | 300 | A sweeping arc of eldritch force that cleaves foes from afar (sword hit x2, the wave x3 damage). |
 | Tasha's Caustic Brew | 1 | 300 | A chant, then a torrent of acid that washes over the foes before you and poisons them. |
 | Misty Strike | 2 | 500 | Step through the mist behind a foe and strike before they can turn. Works from a jump. |
 | Misty Dive | 3 | 800 | Vanish into mist and plunge down on a foe from above. Works from the air. On a big monster you land on its body. |
@@ -101,12 +101,19 @@ Jump
 
 ## Changelog
 
+**1.0.2**
+- Upgraded swords (with their own item data) now get Magick = Strength and Thunder too - before, only unupgraded
+  swords did, so Eldritch Bolt / Blast / Slash's wave were very weak with them.
+- Eldritch Slash: the wave's hits are recognised properly (its damage comes from sub-projectiles); sword hit x2,
+  wave x3.
+- The save guard (sword plain while the game saves) lets go by itself after 5 s at the latest.
+
 **1.0.1**
 - Otherworldly Guise: real immunity to Caught Fire, Torched, Blighted and Fulminant Poison, fire damage halved (the
   status-screen values alone didn't protect).
 - Levitate can be started again in the same jump.
 - Misty Dive: on big monsters you land on their body instead of being put on the ground.
-- Eldritch Slash: sword hit x3, the wave x9 damage.
+- Eldritch Slash: more damage.
 - Hex takes priority over Hellish Rebuke when both could fire on one Interact press.
 
 ## Settings

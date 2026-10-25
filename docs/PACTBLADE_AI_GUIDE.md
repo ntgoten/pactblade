@@ -1,4 +1,4 @@
-# Pactblade - guide for an AI agent (state: release 1.0.1, 2026-10-25)
+# Pactblade - guide for an AI agent (state: release 1.0.2, 2026-10-25)
 
 Purpose: everything an agent needs to rebuild, extend or debug the Pactblade custom vocation for Dragon's Dogma 2
 (post-DLC PC build) without re-discovering it. Dense on purpose. Companion for humans: PACTBLADE_MODDER_GUIDE.md.
@@ -66,7 +66,10 @@ history, newest at the bottom - grep it, don't read it whole), HANDOFF.md (older
 - Damage: `HitController.calcDamageValue` post (big hook): player hits Damage x (phys + 1.5 mag)/(phys + mag);
   blasts: magick base x DamageRate x BLAST[kind].factor (charged 0.4255, tap 0.2127); slash x2; Hex x1/0.9.
 - Sword: with a sword the held weapon's item data gets Magick = Strength and element Thunder (ELEMENT_CHOICES pick 4,
-  _ElementStore 100), via item master data; restored when inactive and around every save / online upload (guard).
+  _ElementStore 100), via item master data AND the equipped Main StorageData's own _ItemData copy (upgraded swords
+  carry one - changing only the master data does nothing for them), then a full recalc (EquipData clearParam + calc +
+  applyEquipDataForCharacter); restored when inactive and around every save / online upload (guard; it lets go by
+  itself after 5 s if a save's end never comes).
   Boons (StatusCondition 15/16/17) refused in `reqStatusConditionApplyCore` for the player.
 - Speed: basic attacks via `a:set_speed` (Onslaught Job01_AttackLeft/Right/Air 1.5, other Job01 attacks 1.2).
 - Core skills: `isNormalSkillEnable` / `isNormalSkillAvailable` hooks GRANT {17 BreakFall, 18 KickWall, 27 Quik Fot},
@@ -104,7 +107,7 @@ history, newest at the bottom - grep it, don't read it whole), HANDOFF.md (older
 ## 4. Skills (implementation)
 | Skill | Trigger id | Animation | Core mechanism |
 |---|---|---|---|
-| Eldritch Slash | HindsightSlash | Warrior Job05_CrescentSlashNormal 0-97 (super armour) | at cfg.slashFrame fire Magike Cut wave = Job07 shell 6 from R_Hand_Palm; range via ShellAdditionalJob07SubNormalAttackShell.update DefaultRangeDist; wave ends by set_RequestKill; parts -1/10/1 (follows the wave), -1/10/3, -1/10/6 replaced by baked pb_10_*_h285; wave dmg x9 (BLAST.slash.dmgMul), the swing itself x3 (combo.slash.on in calcDamageValue), stagger 5; turns toward the nearest enemy; 160 stamina |
+| Eldritch Slash | HindsightSlash | Warrior Job05_CrescentSlashNormal 0-97 (super armour) | at cfg.slashFrame fire Magike Cut wave = Job07 shell 6 from R_Hand_Palm; range via ShellAdditionalJob07SubNormalAttackShell.update DefaultRangeDist; wave ends by set_RequestKill; parts -1/10/1 (follows the wave), -1/10/3, -1/10/6 replaced by baked pb_10_*_h285; wave dmg x3 (BLAST.slash.dmgMul; its hits come from the wave's SUB-shells -> any player shell hit within 4 s of dbg.slashT without another kind = "slash"), the swing itself x2 (combo.slash.on in calcDamageValue), stagger 5; turns toward the nearest enemy; 160 stamina |
 | Tasha's Caustic Brew | FullMoonSlash | Mage chant: dynamic motion bank 9112 = ch00_006_atk.motlist (700 start, 701 loop, 750 release), MotionFsm2 paused (castT) | 3 s chant (Mage circle cs 0/304 on our anchor in front), then acid wave pb_acid_v3 from 1 m ahead; every 0.3 s enemies in the strip (half width 1.25 m) take 72 directDamage + 35 poison points (own meter, 100 = Poison via reqStatusConditionApplyCore), lingers 5 s; splash sounds from monster bank ch221000 (trigger 3870869112); 150 stamina at the pour (setRemainingAmount: `add` is ignored during chants); a damage reaction requested for the player during the chant (Dmg*/Caught*/Down/Blown/Slam) cancels it |
 | Misty Strike | CymbalAttack | Job07_SkyDive crouch (bank 170) held 0.25 s -> warp behind the target (radius + 1.2 m, far side) -> Riotous Fury Job01_BravesRaid 110/1701 crossfaded to frame 106 | after the hit: x1.7 speed from 150 (set_Frame step - the layer speed is ignored), any attack/skill/jump/vocation/dash press from frame 170 ends it (crossfade to the last frame, 8 frames), cut at 235; landing/fall requests refused while it plays; from a jump: 0.2 s air hold with SkyDive launch effects; target = beam's aim pick 15 m; ground height from cast_ray; 110 stamina |
 | Misty Dive | RisingLunge | SkyDive prep jump -> warp 1.8 m above the enemy -> air Empale (Job01_HeavyAttackAir) | own descent (x/z follow the enemy, never up, 7 m/s), held at its head up to 0.25 s, sure hit directDamage 1500 Hitback_L, lands just outside its body - except on big ones (CharaController radius >= md.bigRadius 1.0): released to fall onto its body (Skydragon-like); SkyDive teal replaced by baked copies (md.FX 14/7/10, 14/7/11, 13/0/10, 0/15/0 -> pb_sd*_h<hue>); super armour; 15 m; 110 stamina |

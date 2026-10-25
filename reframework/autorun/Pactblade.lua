@@ -6,7 +6,7 @@
 --   * Blast damage = the hit's magick base x Magick Bolt's attack multiplier x the passive's magick bonus x 5 / 10.
 --   * Passive on all your other hits: magick part x1.5 (physical part unchanged).
 -- Nothing is written into the save; Reset scripts or removing the file undoes everything.
-local NAME, VERSION = "Pactblade", "1.0.1"
+local NAME, VERSION = "Pactblade", "1.0.2"
 local DATA = "Pactblade.json"
 -- (1.0) RELEASE (json.RELEASE): the short menu, and of the data files only the ones Pactblade needs are written.
 -- A test build: RELEASE = false below (the full test menu + the debug dumps). (No extra main-chunk locals: 200 max.)
@@ -47,7 +47,7 @@ local SKELETON_SHELLS = "AppSystem/ch/ch226/userdata/ch226003_shellparamdata.use
 local BLAST = {
     -- Eldritch Slash's wave (Magike Cut's shell 6): coloured like the blasts; keeps its own damage (no factor) and its
     -- full-size hit effects (noScale)
-    slash = { shell = 6, noScale = true, name = "Eldritch Slash", dmgMul = 9, stagger = 5 },   -- (1.0.1 user: x3, then x3 again = x9)   -- stagger: 2.0 -> 10 (user)
+    slash = { shell = 6, noScale = true, name = "Eldritch Slash", dmgMul = 3, stagger = 5 },   -- (1.0.2 user: x3 - the earlier x9 was set while the wave multiplier never applied)   -- stagger: 2.0 -> 10 (user)
     tap = { action = "Job07_MagicBindImcomplete", layer = 1, delay = 0.46, shell = 13, scale = 1.0, speed = 0.4,
             fallback = "Job07_MagicBindImcompleteFullBody", fallbackLayer = 0,   -- when the upper-body one won't start
             fx = 1.0, flash = "own", mult = 5, factor = 0.2127, name = "Eldritch Blast", stagger = 0.25 },
@@ -2695,6 +2695,26 @@ local HOLY, HOLY_STORE = 4, 100
 local ELEMENT_CHOICES = { { "Holy", 4 }, { "Fire", 1 }, { "Ice", 2 }, { "Thunder", 3 }, { "none", 0 } }
 local swordEl = { pick = 4 }   -- index into ELEMENT_CHOICES: Thunder (damage, swing trail and sounds; user's choice)
 local function sword_element() return ELEMENT_CHOICES[swordEl.pick][2] end
+-- (1.0.2 user: a NEW sword got no magick / element) the equipped main weapon's storage data + its own item-data copy
+function dbg.main_weapon_sd()
+    local im = sdk.get_managed_singleton("app.ItemManager")
+    local a = runtime.player()
+    if not im or not a then return nil end
+    local ed = im:call("getEquipData(app.Character)", a.character)
+    local data = ed and ed:get_field("Data")
+    local MAIN = sdk.find_type_definition("app.EquipData.SlotEnum"):get_field("Main"):get_data(nil)
+    local sd = data and data:call("get(app.EquipData.SlotEnum)", MAIN)
+    return sd, data, im, a
+end
+function dbg.equip_recalc()   -- the equipment totals fully recomputed (the guise's way: clear first, calc() adds)
+    pcall(function()
+        local _, data, im, a = dbg.main_weapon_sd()
+        if not data then return end
+        pcall(data.call, data, "clearParam")
+        pcall(data.call, data, "calc")
+        pcall(im.call, im, "applyEquipDataForCharacter(app.Character)", a.character)
+    end)
+end
 local function refresh_equipment(itemId)
     local im = sdk.get_managed_singleton("app.ItemManager")
     if not im then return end
@@ -2720,6 +2740,7 @@ local function refresh_equipment(itemId)
         end)
     end
     pcall(function() im:call("applyEquipDataForCharacter()") end)
+    pcall(dbg.equip_recalc)
 end
 local function sword_restore()
     if not swordMod then return end
@@ -2728,6 +2749,10 @@ local function sword_restore()
         swordMod.param._Element = swordMod.el
         swordMod.param._ElementStore = swordMod.store
     end)
+    if swordMod.own then pcall(function()   -- (1.0.2) the sword's own copy back too
+        local o = swordMod.own
+        o.obj._MagicAttack, o.obj._Element, o.obj._ElementStore = o.mag, o.el, o.store
+    end) end
     local itemId = swordMod.itemId
     swordMod = nil
     refresh_equipment(itemId)
@@ -2792,7 +2817,10 @@ local function sword_update()
     if swordMod and swordMod.id == id then
         -- keep it applied (another mod or the game could have reset the value)
         pcall(function()
-            if swordMod.param._MagicAttack ~= swordMod.param._PhysicalAttack or swordMod.param._Element ~= sword_element() then
+            local o = swordMod.own and swordMod.own.obj
+            if swordMod.param._MagicAttack ~= swordMod.param._PhysicalAttack or swordMod.param._Element ~= sword_element()
+               or (o and (o._MagicAttack ~= o._PhysicalAttack or o._Element ~= sword_element())) then
+                if o then o._MagicAttack, o._Element, o._ElementStore = o._PhysicalAttack, sword_element(), HOLY_STORE end
                 swordMod.param._MagicAttack = swordMod.param._PhysicalAttack
                 swordMod.param._Element = sword_element()
                 swordMod.param._ElementStore = HOLY_STORE
@@ -2810,8 +2838,20 @@ local function sword_update()
     param._MagicAttack = param._PhysicalAttack
     param._Element = sword_element()
     param._ElementStore = HOLY_STORE
+    pcall(function()   -- (1.0.2) a sword with its OWN item-data copy (e.g. a newly found / enhanced one): that copy too
+        local sd = dbg.main_weapon_sd()
+        local own = sd and sd:get_field("_ItemData")
+        if own and own:get_address() ~= param:get_address() and own:get_field("_PhysicalAttack") ~= nil then
+            swordMod.own = { obj = own:add_ref(), mag = own._MagicAttack, el = own._Element, store = own._ElementStore }
+            own._MagicAttack = own._PhysicalAttack
+            own._Element = sword_element()
+            own._ElementStore = HOLY_STORE
+            note(("sword: its own item copy too (Strength %s -> Magick %s)"):format(tostring(own._PhysicalAttack), tostring(own._MagicAttack)))
+        end
+    end)
     dbg.sword = ("sword: Strength %s -> Magick %s (was %s), Holy %s (was element %s)"):format(tostring(param._PhysicalAttack),
         tostring(param._MagicAttack), tostring(swordMod.mag), tostring(HOLY_STORE), tostring(swordMod.el))
+    note(dbg.sword)
     refresh_equipment(swordMod.itemId)
 end
 re.on_frame(function() pcall(sword_update) end)
@@ -3006,6 +3046,13 @@ pcall(function()
             s.pbKind = okK and kind or nil
 
             if not s.pbKind and is_bind_bolt(info:get_AttackHitController()) then s.pbKind = "bind" end
+            if not s.pbKind and dbg.slashT and os.clock() - dbg.slashT < 4 then   -- (1.0.2 user: the wave did ~nothing)
+                pcall(function()   -- its damage comes from the wave's own sub-shells, not the shell we spawned: any shell of mine
+                    local hc = info:get_AttackHitController()
+                    local go = hc and hc:get_GameObject()
+                    if go and go:get_address() ~= live.go and go:call("getComponent(System.Type)", sdk.typeof("app.Shell")) then s.pbKind = "slash" end
+                end)
+            end
             if combo.stage == 4 and not combo.finalHit then combo.finalHit = true; note("final strike hit") end
             if combo.stage == 1 and not combo.target then
                 pcall(function()
@@ -3076,7 +3123,7 @@ pcall(function()
                 end
                 if kind and live.on and BLAST[kind] and BLAST[kind].dmgMul then info.Damage = info.Damage * BLAST[kind].dmgMul end
                 if not kind and live.on and combo.slash and combo.slash.on then   -- (1.0.1 user) Eldritch Slash's sword swing x3
-                    info.Damage = info.Damage * (combo.slash.swordMul or 3)
+                    info.Damage = info.Damage * (combo.slash.swordMul or 2)   -- (1.0.2 user: x2)
                     row.kind = "Eldritch Slash (sword)"
                 end
                 if kind == "charged" and live.on and mag > 0 then   -- (3.34: the beam's damage base: the game's raw magick value)
@@ -10854,6 +10901,7 @@ end)()
     dbg.guard = G
     local function strip(why)
         dbg.guardHold = true
+        G.stripAt = os.clock()
         pcall(sword_restore)
         G.chestWas = false
         pcall(function()
@@ -10917,6 +10965,14 @@ end)()
             or n == "registerSupportPawnLost"
     end)
     re.on_script_reset(function() dbg.guardHold = false end)
+    -- (1.0.2 user: Bolt / Blast / Slash wave did ~no damage = the sword stayed plain: a save's end never came) the guard
+    -- lets go by itself after 5 s - a save / an upload build takes far less
+    re.on_frame(function()
+        if not dbg.guardHold or os.clock() - (G.stripAt or 0) < 5 then return end
+        note(("guard: no end seen after 5 s (save depth %d, online %d) - the sword gets its magick back"):format(G.saveDepth, G.onlineDepth))
+        G.saveDepth, G.onlineDepth, G.saving = 0, 0, false
+        apply()
+    end)
 end)()
 ;(function()   -- (4.100) a rest (inn / camp) ends the Otherworldly Guise
     local function rested(where)
