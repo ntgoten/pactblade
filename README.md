@@ -4,7 +4,7 @@ A custom vocation for Dragon's Dogma 2: a pact-bound swordsman with a fast, magi
 eldritch magick in the other. No shield. Inspired by the D&D 5e warlock (names only).
 
 Pactblade is built on **Vocation & Skill Builder (VSB)** as a Fighter vocation and runs as a REFramework script.
-Play it as Fighter, or as Warfarer with a sword. Version **1.0**.
+Play it as Fighter, or as Warfarer with a sword. Version **1.0.1**.
 
 **Download:** the zip from [Releases](../../releases) - it includes the effect / sound pak, which is not in the source here.
 
@@ -59,10 +59,10 @@ Learned at the Vocation Guild with Discipline (DCP), equipped like any weapon sk
 
 | Skill | Rank | DCP | What it does |
 |---|---|---|---|
-| Eldritch Slash | 1 | 300 | A sweeping arc of eldritch force that cleaves foes from afar. |
+| Eldritch Slash | 1 | 300 | A sweeping arc of eldritch force that cleaves foes from afar (sword hit x3, the wave x9 damage). |
 | Tasha's Caustic Brew | 1 | 300 | A chant, then a torrent of acid that washes over the foes before you and poisons them. |
 | Misty Strike | 2 | 500 | Step through the mist behind a foe and strike before they can turn. Works from a jump. |
-| Misty Dive | 3 | 800 | Vanish into mist and plunge down on a foe from above. Works from the air. |
+| Misty Dive | 3 | 800 | Vanish into mist and plunge down on a foe from above. Works from the air. On a big monster you land on its body. |
 | Eldritch Blast | 5 | 1500 | A searing beam of eldritch energy from your off hand. Works from the air. |
 | Archfey Combo | 7 | 2500 | A fey-born flurry: vanish and strike from every side in quick succession. |
 | Eldritch Smite | 8 | 3000 | A crushing two-part overhead blow that knocks even great foes to the ground. |
@@ -72,9 +72,10 @@ Each skill has a second level for 100 DCP at the same rank (it's there for the g
 the skill). A hit strong enough to make you flinch or fall interrupts a chant (Caustic Brew, Guise).
 
 **Tasha's Otherworldly Guise** (60 s, paused in menus):
-- +20 % Defense and Magick Defense
-- Fire, burning and poison resistance (all on the status screen)
-- **Levitate:** hold Jump in the air, steer with the stick (no Eldritch Bolt while levitating)
+- +20 % Defense and Magick Defense (on the status screen)
+- **Immune** to Caught Fire, Torched, Blighted and Fulminant Poison; fire damage halved
+- **Levitate:** hold Jump in the air, steer with the stick; let go and hold again to float once more in the same jump
+  (no Eldritch Bolt while levitating)
 - A ghostly armour over your own
 
 ## Combos
@@ -97,6 +98,16 @@ Jump
  ├─ Eldritch Blast / Misty Dive / Misty Strike → their air versions
  └─ with Otherworldly Guise on: hold Jump → LEVITATE
 ```
+
+## Changelog
+
+**1.0.1**
+- Otherworldly Guise: real immunity to Caught Fire, Torched, Blighted and Fulminant Poison, fire damage halved (the
+  status-screen values alone didn't protect).
+- Levitate can be started again in the same jump.
+- Misty Dive: on big monsters you land on their body instead of being put on the ground.
+- Eldritch Slash: sword hit x3, the wave x9 damage.
+- Hex takes priority over Hellish Rebuke when both could fire on one Interact press.
 
 ## Settings
 

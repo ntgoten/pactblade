@@ -6,7 +6,7 @@
 --   * Blast damage = the hit's magick base x Magick Bolt's attack multiplier x the passive's magick bonus x 5 / 10.
 --   * Passive on all your other hits: magick part x1.5 (physical part unchanged).
 -- Nothing is written into the save; Reset scripts or removing the file undoes everything.
-local NAME, VERSION = "Pactblade", "1.0"
+local NAME, VERSION = "Pactblade", "1.0.1"
 local DATA = "Pactblade.json"
 -- (1.0) RELEASE (json.RELEASE): the short menu, and of the data files only the ones Pactblade needs are written.
 -- A test build: RELEASE = false below (the full test menu + the debug dumps). (No extra main-chunk locals: 200 max.)
@@ -47,7 +47,7 @@ local SKELETON_SHELLS = "AppSystem/ch/ch226/userdata/ch226003_shellparamdata.use
 local BLAST = {
     -- Eldritch Slash's wave (Magike Cut's shell 6): coloured like the blasts; keeps its own damage (no factor) and its
     -- full-size hit effects (noScale)
-    slash = { shell = 6, noScale = true, name = "Eldritch Slash", dmgMul = 2, stagger = 5 },   -- stagger: 2.0 -> 10 (user)
+    slash = { shell = 6, noScale = true, name = "Eldritch Slash", dmgMul = 9, stagger = 5 },   -- (1.0.1 user: x3, then x3 again = x9)   -- stagger: 2.0 -> 10 (user)
     tap = { action = "Job07_MagicBindImcomplete", layer = 1, delay = 0.46, shell = 13, scale = 1.0, speed = 0.4,
             fallback = "Job07_MagicBindImcompleteFullBody", fallbackLayer = 0,   -- when the upper-body one won't start
             fx = 1.0, flash = "own", mult = 5, factor = 0.2127, name = "Eldritch Blast", stagger = 0.25 },
@@ -2527,6 +2527,7 @@ local DUMMIES = {
     { name = "Cyclops", path = "AppSystem/ch/ch250/prefab/ch250000_00.pfb", tag = "ch250000" },
     { name = "Chimera", path = "AppSystem/ch/ch254/prefab/ch254000_00.pfb", tag = "ch254000" },
     { name = "Griffin", path = "AppSystem/ch/ch253/prefab/ch253000_00.pfb", tag = "ch253000" },   -- (3.60 user)
+    { name = "Gagana", path = "AppSystem/ch/ch253/prefab/ch253012_00.pfb", tag = "ch253012" },   -- (1.0.1 user: fire tests)
 }
 local dummy = { wanted = {}, set = {}, hits = {}, count = 0, status = "-" }   -- set: chara address -> { chara, paused }
 local function dummy_spawn(d)
@@ -3074,6 +3075,10 @@ pcall(function()
                     info.Damage = before * (phys * PHYS_BONUS + mag * MAG_BONUS) / (phys + mag)
                 end
                 if kind and live.on and BLAST[kind] and BLAST[kind].dmgMul then info.Damage = info.Damage * BLAST[kind].dmgMul end
+                if not kind and live.on and combo.slash and combo.slash.on then   -- (1.0.1 user) Eldritch Slash's sword swing x3
+                    info.Damage = info.Damage * (combo.slash.swordMul or 3)
+                    row.kind = "Eldritch Slash (sword)"
+                end
                 if kind == "charged" and live.on and mag > 0 then   -- (3.34: the beam's damage base: the game's raw magick value)
                     dbg.boltMag = mag * (info.DamageRate or 1)
                 end
@@ -6230,7 +6235,8 @@ end)
         if not a then return end
         local grounded = true
         pcall(function() grounded = a:is_grounded() end)
-        if grounded then L.heldT, L.used = 0, false; return end
+        if grounded then L.heldT, L.used, L.jumpY0 = 0, false, nil; return end
+        if L.used and not L.active and now >= (L.reAt or 0) then L.used = false end   -- (1.0 user: levitate again in the same jump)
         if L.used then
             if L.watchUntil and now < L.watchUntil and now >= (L.watchAt or 0) then
                 L.watchAt = now + 0.25
@@ -6256,7 +6262,8 @@ end)
         end)
         local y0 = a.character:get_GameObject():get_Transform():get_Position().y
         local p0 = a.character:get_GameObject():get_Transform():get_Position()
-        L.active = { t0 = now, y0 = y0, y = y0, tl = now, x = p0.x, z = p0.z }
+        L.jumpY0 = L.jumpY0 or y0   -- (the rise is capped from the jump's first float: no climbing by re-floating)
+        L.active = { t0 = now, y0 = math.min(y0, L.jumpY0), y = y0, tl = now, x = p0.x, z = p0.z }
         L.info = ("floating from %s"):format(tostring(a:current_action(0)))
         note("Levitate: " .. L.info)
     end)
@@ -6370,6 +6377,7 @@ end)
         end
         if why then
             L.active = nil
+            L.reAt, L.heldT = now + 0.3, 0
             if a then pcall(gu.lev_calm, a) end
             L.info = ("ended (%s) after %.1f s"):format(why, now - F.t0)
             note("Levitate: " .. L.info)
@@ -8296,6 +8304,11 @@ function md.strike(a, F, why)
         local tq = t:get_GameObject():get_Transform():get_Position()
         local r = 0.5
         pcall(function() r = t["<CharaController>k__BackingField"]:call("get_Radius") or r end)
+        if r >= (md.bigRadius or 1.0) then   -- (1.0 user: like Skydragon - on a big monster you land on its body and stay)
+            md.landedAt = nil
+            note(("Misty Dive: a big one (radius %.1f m) - left to fall onto its body"):format(r))
+            return
+        end
         local gap = r + md.landGap
         local tr = a.character:get_GameObject():get_Transform()
         local p = tr:get_Position()
@@ -11161,6 +11174,88 @@ end)()
 
 
 
+
+------------------------------------------------------------------------
+-- (1.0 user: the guise gave nothing against fire - a Gagana set him on fire) while the guise is on: burning and poison
+-- are refused for me, fire hits on me do gu.fireTaken (0.5) of their damage. Statuses asked for me are noted once.
+------------------------------------------------------------------------
+;(function()
+    local SC = sdk.find_type_definition("app.StatusConditionDef.StatusConditionEnum")
+    local function enum(n) local ok, v = pcall(function() return SC:get_field(n):get_data(nil) end); return ok and v or nil end
+    local REFUSE = {}
+    -- (Caught Fire, Torched = tar on fire, Blighted, Fulminant Poison)
+    for _, n in ipairs({ "FireSpread", "OilSpread", "Poison", "VirulentPoison" }) do local v = enum(n); if v then REFUSE[v & 0xFFFFFFFF] = n end end
+    local NAMES = {}
+    pcall(function() for _, f in ipairs(SC:get_fields()) do if f:is_static() then local v = f:get_data(nil); if type(v) == "number" then NAMES[v & 0xFFFFFFFF] = f:get_name() end end end end)
+    local function guise_on() local g = dbg.guise; return g ~= nil and g.on == true and live.on end
+    local seen = {}
+    -- (1.0.1 user: Blighted -> Fulminant Poison still came) statuses also arrive by flag lists that skip the hook below:
+    -- every frame while the guise is on, the active ones on me (flag bit = 1 << enum) - refused ones cured at once,
+    -- every new one noted by name
+    local lastFlags = 0
+    re.on_frame(function()
+        if not guise_on() then lastFlags = 0; return end
+        local a = runtime.player()
+        if not a then return end
+        pcall(function()
+            local sc = a.character["<StatusConditionCtrl>k__BackingField"]
+            local flags = sdk.to_int64(sc:call("get_ActiveStatusConditionFlagProp")) or 0
+            if flags == lastFlags then return end
+            local new = flags & ~lastFlags
+            lastFlags = flags
+            for id, name in pairs(NAMES) do
+                if id < 63 and (new & (1 << id)) ~= 0 then note(("Guise: status on me: %s%s"):format(name, REFUSE[id] and " - cured" or "")) end
+            end
+            for id, name in pairs(REFUSE) do
+                if id < 63 and (flags & (1 << id)) ~= 0 then
+                    pcall(sc.call, sc, "reqStatusConditionCure(app.StatusConditionDef.StatusConditionEnum, System.Boolean)", id, false)
+                end
+            end
+        end)
+    end)
+    pcall(function()
+        sdk.hook(sdk.find_type_definition("app.StatusConditionCtrl"):get_method(
+            "reqStatusConditionApplyCore(app.StatusConditionDef.StatusConditionEnum, app.HitController.DamageInfo, app.StatusConditionDef.RequestInfo, System.Boolean)"),
+            function(args)
+                if not guise_on() or not live.sc or sdk.to_int64(args[2]) ~= live.sc then return end
+                local id = sdk.to_int64(args[3]) & 0xFFFFFFFF
+                local name = REFUSE[id]
+                if not seen[id] then seen[id] = true; note(("Guise: status asked for me: %s%s"):format(tostring(NAMES[id] or id), name and " - refused" or "")) end
+                if name then return sdk.PreHookResult.SKIP_ORIGINAL end
+            end, function(r) return r end)
+    end)
+    pcall(function()
+        sdk.hook(sdk.find_type_definition("app.HitController"):get_method("calcDamageValue(app.HitController.DamageInfo)"),
+            function(args)
+                local st = thread.get_hook_storage()
+                st.pbFire = nil
+                if not guise_on() then return end
+                pcall(function()
+                    local info = sdk.to_managed_object(args[3])
+                    local v = info["<DamageGameObject>k__BackingField"]
+                    if not v or v:get_address() ~= live.go then return end
+                    local el = -1
+                    pcall(function() el = tonumber(info["<AttackUserData>k__BackingField"]:get_field("_ElementType")) or -1 end)
+                    if el ~= 1 then pcall(function() el = tonumber(info:call("get_ElementType")) or el end) end
+                    if el == 1 then st.pbFire = info end   -- 1 = Fire
+                end)
+            end, function(r)
+                local st = thread.get_hook_storage()
+                local info = st.pbFire
+                st.pbFire = nil
+                if info then
+                    pcall(function()
+                        local k = (dbg.guise and dbg.guise.fireTaken) or 0.5
+                        local before = info.Damage
+                        info.Damage = before * k
+                        note(("Guise: fire hit on me %.0f -> %.0f"):format(before, info.Damage))
+                    end)
+                end
+                return r
+            end)
+    end)
+end)()
+
 re.on_draw_ui(function()
     if not imgui.tree_node(NAME .. " " .. VERSION) then return end
     for _, c in ipairs(THEME) do imgui.push_style_color(c[1], c[2]) end
@@ -11667,7 +11762,7 @@ re.on_draw_ui(function()
         end
         imgui.new_line()
         for _, d in ipairs(DUMMIES) do
-            if d.tag == "ch250000" or d.tag == "ch254000" or d.tag == "ch253000" or d.tag == "ch230004" then
+            if d.tag == "ch250000" or d.tag == "ch254000" or d.tag == "ch253000" or d.tag == "ch253012" or d.tag == "ch230004" then
                 if imgui.button("Spawn a NORMAL " .. d.name .. " (fights)##real") then require("DragonCore.game.actor_fx").defer(function() dummy.real(d) end) end
                 imgui.same_line()
             end
