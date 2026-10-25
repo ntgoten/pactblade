@@ -163,6 +163,27 @@ history, newest at the bottom - grep it, don't read it whole), HANDOFF.md (older
 - Runtime tint `ep:set_Color` multiplies and can veil the screen on see-through layers -> prefer baked copies;
   cfg.noTint holds ids never tinted.
 
+### 5.1 Pak catalogue (pak_release, 136 files: 131 efx + 5 gradient textures; all under vfx/effects/pactblade/)
+| File(s) | Source effect | Used by |
+|---|---|---|
+| pb_40_e285/300/315 (+ _g120, _gy) | Eldritch Bolt shell container 8 element 40 = launch flash (cs_008 family), mesh colour hash f20fbe80 tinted | Bolt / Burst / air Blast launch (parts "ours", scaled 0.3 / 0.5), beam hit; g120 / gy = Hellish Rebuke |
+| pb_43_e285/300/315 (+ _g120, _gy) | same, element 43 = explosion (cs_008_31); fog layers sk0 / ky0 / mkky / miky / mky + debris hidden | Bolt / Burst explosion (scaled cfg.boom 0.31), Smite part-2 hit (x2.5), beam hit; Rebuke explosion |
+| pb_10_1 / _3 / _6 _h<hue> | Magike Cut wave (Job07 shell 6) container 10 elements 1 / 3 / 6 | Eldritch Slash wave (10_1 follows the wave) |
+| pb_beam*, pb_beamrow[b-g], pb_beamhand, pb_beamhit[2] _h<hue> | Golem hand flash 030_01 (ch52/000) and 030_03; variants with blur / shock / dis / com_CamS / com_RadialS layers hidden by alpha or light black | Eldritch Blast beam row (beamrowf = the final look), hand flash |
+| pb_sd10 / sd11 / sd20 / sd21 / sdex / sdns10 _h<hue> | Skydragon (Job07_SkyDive) pieces 14/7/10, 14/7/11, 14/7/20, 14/7/21, 0/15/0 (ch00 EX flash, inverted layers at the opposite hue), 13/0/10 | Misty Dive / Misty Strike (md.FX swap, air hold effects) |
+| pb_ai00 / ai20 _h<hue> | Mirage Dance cs_010_00 elements 0 / 20 (20 = black pulsing distortion, unused) | Guise cloud, afterimage aura |
+| pb_arm_h<hue>g1-4, pb_arm_no_dis | Mystic Spearhand charge glow (ch07 ns 25), distortion layer hidden, colours + light colours tinted, RgbCommon intensities x1 / x2 / x3.5 / x6 | arm effect (glow strength 1-4) |
+| pb_bs10-12 / 15-17 _g120 / _gy / _gy2 | player body flames ch00/bs/13_ch00_BadStatus_000_<n> (fire) | Hellish Rebuke, swapped into the player's 13_chcm_pl_Ref data (gy2 = used) |
+| pb_bc10-12_gy2 | enemy humans Common/BadStatus/13_Cm_BadStatus_100_<n> | Rebuke: data 13_chcm_em_pl_Ref |
+| pb_bl10-14_gy2 | large monsters Common/BadStatus/13_Cm_BadStatus_101_<n> | Rebuke: data 13_chcm_em_L_<ch>_Ref |
+| pb_torch_g120 / _gy | a torch flame | Rebuke flame in the left palm |
+| pb_rebuke_h120 / h140 | Golem copy | unused (kept) |
+| pb_hexx_b1-3 | a shimmer line, fluid simulator colours edited to pink, intensity 1.5 / 2.5 / 4 | Hex X (2 copies rolled +-45 deg, frozen at 0.8 s) |
+| pb_acid_v3 | Chimera acid ch54_001_liquidshell_020_03, black cloud / decal layers hidden, green | Caustic Brew wave (copies from 1 m ahead) |
+| texture/gradient/13_p285 / p300 / p315 / g120 / g140 _000_00_alb.tex | copies of a game gradient texture (same name length), recoloured | referenced by baked efx whose colour lives in a gradient |
+Not in the pak (played from the game's own files on own EffectPlayers): the door / pillar frost shimmer
+(wp00/009 enchant_25), the cs0220 door glow, Mage chant circle cs 0/304 (requested on our anchor).
+
 ## 6. Save / online guard
 Hooks on SaveDataManager save / saveGameSaveData, ItemManager saveGameSaveData / saveGameSaveDataTarget /
 fillStorageSaveData / makeLoopSaveData, OnlinePawnDataFormatter updatePlaydataFrom* / getEquipSnapshot* /
