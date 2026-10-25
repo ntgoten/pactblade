@@ -4,7 +4,8 @@ Pactblade is a custom vocation for Dragon's Dogma 2: a sword in one hand, eldrit
 and a handful of always-on abilities. This guide explains how it's put together and how each part was built - in detail, with the problems on the way -
 so you can make something similar, or continue Pactblade. It assumes you know Lua basics and have used REFramework.
 
-A denser, more technical version for AI assistants is `PACTBLADE_AI_GUIDE.md`. The source is the script
+A denser, more technical version for AI assistants is `PACTBLADE_AI_GUIDE.md`. The code itself - every hook,
+table, game call, with excerpts - is explained in `PACTBLADE_CODE_WALKTHROUGH.md`. The source is the script
 `reframework/autorun/Pactblade.lua` (search it for the names used here).
 
 ---
@@ -301,7 +302,7 @@ on the way and how they were solved. Times and frames are the tuned values.
 ### 5.6 Tasha's Caustic Brew
 - **Idea:** a chant, then a torrent of acid washing over the enemies in front.
 - **Chant:** the Mage's spell-casting set from the Mage's motion file (`ch00_006_atk.motlist`, loaded as dynamic bank
-  9112: 700 start, 701 chant loop, 750 release). The character's animation state machine (`MotionFsm2`) is paused so
+  9112: 710 start, 712 chant loop, 750 release). The character's animation state machine (`MotionFsm2`) is paused so
   it can't switch away; the motion is forced every frame. The Mage's chant circle is placed upright 0.7 m in front (on a
   staff it hangs there; without one it lay on the ground). The chant's sounds come from the motion's own events.
 - **Interruption:** a damage reaction requested for the player during the chant (flinch, knock-down, grab...) cancels

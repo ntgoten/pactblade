@@ -144,8 +144,9 @@ folder, `reframework/data/VSB/packs/pactblade`, `pak_mods/Pactblade.pak` and `re
 
 - [docs/PACTBLADE_MODDER_GUIDE.md](docs/PACTBLADE_MODDER_GUIDE.md) - for modders: how the vocation and each skill were built.
 - [docs/PACTBLADE_AI_GUIDE.md](docs/PACTBLADE_AI_GUIDE.md) - the same in compact technical form, for AI coding assistants.
+- [docs/PACTBLADE_CODE_WALKTHROUGH.md](docs/PACTBLADE_CODE_WALKTHROUGH.md) - the code itself: every hook, table and game call, with excerpts and a full index.
 
-Both are also in the release zip (Pactblade_docs).
+All three are also in the release zip (Pactblade_docs).
 
 ## Credits
 
