@@ -1,8 +1,8 @@
 # Pactblade - code walkthrough
 
 The deepest of the three documents: how the code is actually built. What gets hooked (exact method signatures),
-what gets called, which tables and game objects get created, with real excerpts from `Pactblade.lua` (release 1.0.2,
-~11,800 lines). Read `PACTBLADE_MODDER_GUIDE.md` first for the ideas; this is the reference behind it. Line numbers
+what gets called, which tables and game objects get created, with real excerpts from `Pactblade.lua` (release 1.1,
+~11,900 lines). Read `PACTBLADE_MODDER_GUIDE.md` first for the ideas; this is the reference behind it. Line numbers
 are approximate (they move with every edit) - search for the names instead.
 
 Contents:
@@ -612,6 +612,61 @@ post-hook on `app.MainCameraController.lateUpdate` writes `mc._CameraJoint:set_P
 aiming, the flight during the arrival). Teleport: `chara:call("warp(via.vec3, via.Quaternion, app.CharacterWarpOption)", dest, rot, ResetPosRotContext)`
 inside the input hook, held 8 frames; a carried NPC warped too and its `PosRotRecorder:resetHistory()`.
 
+### 4.17 Spell slots (1.1)
+**State:** `SL = { used, max, level, rechargeAt, RECHARGE = 20, x = 0.497, y = 0.976, size, gap = 2.6, show, fade,
+flash, deniedAt, SPOTS }` (`dbg.slots`), settings in `Pactblade_slots.json`.
+```lua
+function SL.refresh()   -- every 1 s
+    SL.level = tonumber(a.character:get_Human()["<StatusContext>k__BackingField"]:call("get_Level"))
+    SL.max = math.max(1, math.min(5, 1 + math.floor(SL.level / 15)))
+end
+function SL.use()
+    if SL.used >= SL.max then return false end
+    SL.fade = { idx = SL.max - SL.used, t0 = os.clock() }          -- the rightmost full one fades away
+    SL.used = SL.used + 1
+    if not SL.rechargeAt then SL.rechargeAt = dbg.gclock() + SL.RECHARGE end
+    return true
+end
+-- every frame: one comes back, the next starts
+if SL.rechargeAt and dbg.gclock() >= SL.rechargeAt then
+    SL.used = SL.used - 1
+    SL.rechargeAt = SL.used > 0 and dbg.gclock() + SL.RECHARGE or nil
+    SL.flash = { idx = SL.max - SL.used, t0 = os.clock() }        -- the refilled one blooms
+end
+```
+- **Users of slots:** `sm.press` (Smite): `if not dbg.slots.use() then dbg.slots.deny(); return end`; `gu.press`
+  requires `SL.free() >= 1`; `gu.release` (the chant's end) calls `SL.use()`.
+- **Greyed out:** hooks on `app.HumanSkillAvailability.isCustomSkillAvailable(app.HumanCustomSkillID)` and
+  `isCustomSkillAvailableWithoutItemCondition(app.HumanCustomSkillID)`: pre: `this` must be the player's
+  (`sdk.to_int64(args[2]) == live.avail`), the id (`args[3]`) one of the adapter's smite / guise VSB ids, no slot free
+  → a flag in `thread.get_hook_storage()`; post: `return sdk.to_ptr(0)`.
+- **Drawing** (`re.on_frame`, nothing in menus / when inactive): screen size from `imgui.get_display_size()`,
+  `r = height * 0.0095 * size`, the row centred on `(x * width, y * height)`. Per slot:
+```lua
+draw.filled_circle(cx, cy, r * 1.14, SHADOW, 40)                     -- 0x90000000
+draw.filled_circle(cx, cy, r,        RIM_DARK, 40)                   -- bevelled bronze: dark,
+draw.filled_circle(cx, cy, r * 0.88, RIM_LIGHT, 40)                  -- light,
+draw.filled_circle(cx, cy, r * 0.78, RIM_INNER, 40)                  -- dark
+draw.filled_circle(cx, cy, r * 0.71, CORE, 40)                       -- see-through dark core
+for _, g in ipairs(GEM) do draw.filled_circle(cx, cy, r * g[1], g[2], 40) end   -- violet gem, 3 shades
+-- ready: a breathing halo (alpha 0.65 + 0.35 * sin(t * 2.2 + i)) and a light orbiting at r * 0.86 with a 5-dot tail
+-- colours are ABGR; alpha(col, a) scales the top byte
+```
+  The moon phase (recharging, `p` = 0..1):
+```lua
+local function moon(cx, cy, g, p, col)
+    local n = math.max(2, math.floor(g))
+    for k = -n, n do
+        local y = k / n * g
+        local half = math.sqrt(g * g - y * y)
+        local xt = half * (1 - 2 * p)                                 -- the terminator: an ellipse across the disk
+        draw.filled_rect(cx - half, cy + y - g / n * 0.5, half - xt, g / n + 0.6, col)   -- lit from the left
+    end
+end
+```
+  Used: `SL.fade` draws the gem x(1 + 0.45 t) with alpha (1 - t) for 0.6 s; refilled: `SL.flash` two growing, fading
+  circles + a bright gem for 1 s; denied: a red halo for 0.5 s.
+
 ---
 
 ## 5. Building, testing, debugging
@@ -629,199 +684,201 @@ inside the input hook, held 8 frames; a carried NPC warped too and its `PosRotRe
 
 ---
 
-## Appendix A: every hook in the script (release 1.0.2)
+## Appendix A: every hook in the script (release 1.1)
 
 Line, the game type, the method, and the nearest comment in the code. "(dynamic / loop)" = the method is picked in a loop (every overload of a name, or one hook per type in a list); the type shown is then the nearest one named in the code - read the code at that line.
 
 | Line | Type | Method | Comment |
 |---|---|---|---|
-| 286 | app.StaminaManager | add(System.Single, System.Boolean) | (4.04) a skill's own big drain swapped for our cost (dbg.stamSwap = { cost, untilT }) |
-| 431 | app.HumanSkillAvailability | (dynamic / loop) | (i-0.3) during a translated press the game may use that Fighter skill (it asks for the tra |
-| 449 | app.PlayerInputProcessorDetail | processCustomSkill(app.CharacterInput.Action, app.HumanCustomSkillID, System.UInt64, app.LockOnController.Option, System.Boolean, System.Boolean, System.Boolean) |  |
+| 287 | app.StaminaManager | add(System.Single, System.Boolean) | (4.04) a skill's own big drain swapped for our cost (dbg.stamSwap = { cost, untilT }) |
+| 433 | app.HumanSkillAvailability | (dynamic / loop) | (i-0.3) during a translated press the game may use that Fighter skill (it asks for the tra |
 | 451 | app.PlayerInputProcessorDetail | processCustomSkill(app.CharacterInput.Action, app.HumanCustomSkillID, System.UInt64, app.LockOnController.Option, System.Boolean, System.Boolean, System.Boolean) |  |
-| 507 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | Fighter's shield actions (Defend and the rest) are refused while Pactblade is active |
-| 529 | app.HumanNormalSkillID | (dynamic / loop) | Deflect, True Deflect, Steeled Foundation, Enchanted Counter |
-| 566 | app.Job04BreakFall | setMotion(System.Single) |  |
-| 687 | app.ItemManager | setEquip(app.ItemDefine.StorageData, app.Character, app.EquipData.SlotEnum, System.Boolean, System.Boolean) | when a save loads); a shield already worn is reported in the menu |
-| 1624 | app.ShellManager | requestCreateShell(via.GameObject, via.vec3, via.Quaternion, app.ShellRequest.ShellCreateInfo, app.ShellParamData, app.ShellRequest.EventCreateShellSuccess, app.ShellRequest.EventBeforeShellInstantiate) | the bolt animations fire Mystic Spearhand's own bolt (flinch / hold): those projectiles ar |
-| 1803 | app.MaterialInterpolationRequestManager | (dynamic / loop) |  |
-| 2203 | app.WwiseContainerApp | (dynamic / loop) |  |
-| 2373 | via.effect.script.ObjectEffectManager2 | (dynamic / loop) |  |
-| 2487 | via.effect.script.ObjectEffectManager2 | (dynamic / loop) |  |
-| 2655 | app.PlayerDamageCalculator | (dynamic / loop) |  |
-| 2671 | ? | (dynamic / loop) |  |
-| 2866 | app.StatusConditionCtrl | reqStatusConditionApplyCore(app.StatusConditionDef.StatusConditionEnum, app.HitController.DamageInfo, app.StatusConditionDef.RequestInfo, System.Boolean) | active, and one already on you is cured when Pactblade becomes active |
-| 2892 | app.CharacterDamageCalculator | setElemntTypeOnEnchant(app.AttackUserData.ElementType, app.HitController.DamageInfo) | the game writes it (CharacterDamageCalculator.setElemntTypeOnEnchant) - Holy by default |
-| 2910 | app.PlayerDamageCalculator | getElementTypeByEnchant(app.HitController.DamageInfo) |  |
-| 2946 | via.effect.script.ObjectEffectManager2 | (dynamic / loop) |  |
-| 2972 | app.MaterialInterpolationEnchant | (dynamic / loop) |  |
-| 3029 | app.HitController | calcDamageValue(app.HitController.DamageInfo) |  |
-| 3316 | app.WeaponAndItemHolder.WeaponSlot | (dynamic / loop) |  |
-| 3472 | app.HitController | calcDamageReaction(app.HitController.DamageInfo) | stagger (knockdown) power of each blast kind: BLAST[kind].stagger x the game's value (from |
-| 3498 | app.HitController | getReactionDamageType(app.HitController.DamageInfo) | FlashFlood |
-| 3987 | app.PlayerInputProcessorDetail | (dynamic / loop) |  |
-| 4016 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | where we leave and on us where we land (Quik Fot's sounds stay) |
-| 4047 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | any other way the vanilla Cloudward / Cloudfall starts (a queued press...) is turned into  |
-| 4749 | app.ShellAdditionalJob07SubNormalAttackShell | update() |  |
-| 4826 | app.PlayerInputProcessorDetail | (dynamic / loop) |  |
-| 4844 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla Hindsight Sweep started any other way (a queued press...) becomes Eldritch Sla |
-| 4913 | app.Player | drawReticle | (4.97: the dot was VSB's own crosshair option, not the game's reticle - this stays off) |
-| 5982 | soundlib.SoundContainer | (dynamic / loop) | (4.73: kept over script resets) |
-| 6017 | app.PlayerAttackDefenceStatus | updateDefenceParameters(app.PlayerStatusCalculatorParameter) |  |
-| 6035 | app.PlayerStatusCalculatorParameter | updateStatusConditionResistParameters(app.PlayerStatusCalculatorParameter) |  |
-| 6091 | app.PlayerStatusCalculator | (dynamic / loop) |  |
-| 6107 | app.StatusConditionDef.StatusConditionEnum | calcStatusConditionResistWithEquipmentAndBuff(app.StatusConditionDef.StatusConditionEnum) |  |
-| 6126 | app.PlayerStatusCalculatorParameter | calcStatusConditionResistWithEquipmentAndBuff(app.PlayerStatusCalculatorParameter) |  |
-| 6151 | app.PlayerBasicAttackDefenceStatus | (dynamic / loop) | (4.95: off - it only grew) |
-| 6167 | app.PlayerStatusCalculatorParameter | (dynamic / loop) |  |
-| 6459 | app.SmokeDecoy | (dynamic / loop) | (4.93: setTarget / setStay free again) |
-| 6481 | ? | (dynamic / loop) |  |
-| 6652 | app.PlayerInputProcessorDetail | (dynamic / loop) |  |
-| 6660 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla skill never plays |
-| 6678 | app.HumanSkillAvailability | (dynamic / loop) | a shield skill without a shield: usable for MY character while Pactblade is on |
-| 7166 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | (i-0.4) a hit reaction during the chant: the cast stops, the reaction plays |
-| 7544 | app.StatusConditionActionSlipDamage | setDirectDamage(System.Single, System.Boolean, app.StatusConditionInfo) | our poison hurts sk.poisonMul x as much: the game's poison ticks on enemies Caustic Brew p |
-| 7577 | app.PlayerInputProcessorDetail | (dynamic / loop) | (4.05: paid when the acid pours, sk.release) |
-| 7585 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla skill never plays |
-| 7647 | app.DamageRagdollBlow | start(via.behaviortree.ActionArg) |  |
-| 7704 | app.HitController | getReactionDamageType(app.HitController.DamageInfo) | s from the smite look's start; minus = sooner, down to the smite's start (user: a bit soon |
-| 7730 | app.HitController | calcDamageReaction(app.HitController.DamageInfo) |  |
-| 7786 | app.HitController | (dynamic / loop) |  |
-| 8172 | app.PlayerInputProcessorDetail | (dynamic / loop) | the press of the bound skill (or, while binding, whichever skill is pressed next becomes t |
-| 8187 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla skill started any other way (a queued press ...) becomes the smite too - not t |
-| 8806 | app.HumanCatchProcessor | processFinishingMove(app.HitController.DamageInfo, app.Character) |  |
-| 8853 | app.HumanSkillAvailability | (dynamic / loop) | used (a shield skill needs a shield); for MY character and Misty Dive's slot the answer is |
-| 8876 | app.PlayerInputProcessorDetail | (dynamic / loop) |  |
-| 8890 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla skill never plays |
-| 9093 | app.HitController | calcDamageValue(app.HitController.DamageInfo) |  |
-| 9125 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | no jump right after the Burst step (the same Jump press) |
-| 9608 | via.effect.script.ObjectEffectManager2 | (dynamic / loop) |  |
-| 9645 | app.HitController | getReactionDamageType(app.HitController.DamageInfo) |  |
-| 9662 | app.HitController | calcDamageReaction(app.HitController.DamageInfo) |  |
-| 9751 | app.PlayerInputProcessorDetail | (dynamic / loop) |  |
-| 9766 | app.PlayerInputProcessorDetail | (dynamic / loop) | the vanilla skill never plays |
-| 9781 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | Riotous Fury's opening (the rest of Riotous Fury) is refused |
-| 10097 | app.PlayerInputProcessorDetail | (dynamic / loop) | (3.94 user: from a jump too) |
-| 10112 | app.PlayerInputProcessorDetail | (dynamic / loop) | (3.94) in the air the game never gets that far: the button's own entry first (as the beam' |
-| 10124 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla skill started any other way = Blink Strike; while it plays, Riotous Fury's own |
-| 10164 | app.HitController | calcDamageValue(app.HitController.DamageInfo) | an enemy hits me: the window opens (the attacker kept) |
-| 10687 | app.StatusConditionActionEffectCallEndurance | (dynamic / loop) | (4.17) the status effect call itself: which set / provider / element |
-| 10713 | via.effect.script.ObjectEffectManager2 | (dynamic / loop) | (4.15) which effects the burning target starts (to make its fire green) |
-| 10943 | app.ItemManager | (dynamic / loop) | (saving triggers the builders too) |
-| 10947 | app.ItemManager | (dynamic / loop) |  |
-| 10956 | app.ItemManager | (dynamic / loop) |  |
-| 10988 | app.CampStateBase | (dynamic / loop) |  |
-| 11086 | ? | (dynamic / loop) |  |
-| 11273 | app.StatusConditionCtrl | reqStatusConditionApplyCore(app.StatusConditionDef.StatusConditionEnum, app.HitController.DamageInfo, app.StatusConditionDef.RequestInfo, System.Boolean) |  |
-| 11284 | app.HitController | calcDamageValue(app.HitController.DamageInfo) |  |
+| 453 | app.PlayerInputProcessorDetail | processCustomSkill(app.CharacterInput.Action, app.HumanCustomSkillID, System.UInt64, app.LockOnController.Option, System.Boolean, System.Boolean, System.Boolean) |  |
+| 509 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | Fighter's shield actions (Defend and the rest) are refused while Pactblade is active |
+| 531 | app.HumanNormalSkillID | (dynamic / loop) | Deflect, True Deflect, Steeled Foundation, Enchanted Counter |
+| 568 | app.Job04BreakFall | setMotion(System.Single) |  |
+| 689 | app.ItemManager | setEquip(app.ItemDefine.StorageData, app.Character, app.EquipData.SlotEnum, System.Boolean, System.Boolean) | when a save loads); a shield already worn is reported in the menu |
+| 1626 | app.ShellManager | requestCreateShell(via.GameObject, via.vec3, via.Quaternion, app.ShellRequest.ShellCreateInfo, app.ShellParamData, app.ShellRequest.EventCreateShellSuccess, app.ShellRequest.EventBeforeShellInstantiate) | the bolt animations fire Mystic Spearhand's own bolt (flinch / hold): those projectiles ar |
+| 1805 | app.MaterialInterpolationRequestManager | (dynamic / loop) |  |
+| 2205 | app.WwiseContainerApp | (dynamic / loop) |  |
+| 2375 | via.effect.script.ObjectEffectManager2 | (dynamic / loop) |  |
+| 2489 | via.effect.script.ObjectEffectManager2 | (dynamic / loop) |  |
+| 2657 | app.PlayerDamageCalculator | (dynamic / loop) |  |
+| 2673 | ? | (dynamic / loop) |  |
+| 2868 | app.StatusConditionCtrl | reqStatusConditionApplyCore(app.StatusConditionDef.StatusConditionEnum, app.HitController.DamageInfo, app.StatusConditionDef.RequestInfo, System.Boolean) | active, and one already on you is cured when Pactblade becomes active |
+| 2894 | app.CharacterDamageCalculator | setElemntTypeOnEnchant(app.AttackUserData.ElementType, app.HitController.DamageInfo) | the game writes it (CharacterDamageCalculator.setElemntTypeOnEnchant) - Holy by default |
+| 2912 | app.PlayerDamageCalculator | getElementTypeByEnchant(app.HitController.DamageInfo) |  |
+| 2948 | via.effect.script.ObjectEffectManager2 | (dynamic / loop) |  |
+| 2974 | app.MaterialInterpolationEnchant | (dynamic / loop) |  |
+| 3031 | app.HitController | calcDamageValue(app.HitController.DamageInfo) |  |
+| 3318 | app.WeaponAndItemHolder.WeaponSlot | (dynamic / loop) |  |
+| 3474 | app.HitController | calcDamageReaction(app.HitController.DamageInfo) | stagger (knockdown) power of each blast kind: BLAST[kind].stagger x the game's value (from |
+| 3500 | app.HitController | getReactionDamageType(app.HitController.DamageInfo) | FlashFlood |
+| 3989 | app.PlayerInputProcessorDetail | (dynamic / loop) |  |
+| 4018 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | where we leave and on us where we land (Quik Fot's sounds stay) |
+| 4049 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | any other way the vanilla Cloudward / Cloudfall starts (a queued press...) is turned into  |
+| 4751 | app.ShellAdditionalJob07SubNormalAttackShell | update() |  |
+| 4828 | app.PlayerInputProcessorDetail | (dynamic / loop) |  |
+| 4846 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla Hindsight Sweep started any other way (a queued press...) becomes Eldritch Sla |
+| 4915 | app.Player | drawReticle | (4.97: the dot was VSB's own crosshair option, not the game's reticle - this stays off) |
+| 5984 | soundlib.SoundContainer | (dynamic / loop) | (4.73: kept over script resets) |
+| 6019 | app.PlayerAttackDefenceStatus | updateDefenceParameters(app.PlayerStatusCalculatorParameter) |  |
+| 6037 | app.PlayerStatusCalculatorParameter | updateStatusConditionResistParameters(app.PlayerStatusCalculatorParameter) |  |
+| 6093 | app.PlayerStatusCalculator | (dynamic / loop) |  |
+| 6109 | app.StatusConditionDef.StatusConditionEnum | calcStatusConditionResistWithEquipmentAndBuff(app.StatusConditionDef.StatusConditionEnum) |  |
+| 6128 | app.PlayerStatusCalculatorParameter | calcStatusConditionResistWithEquipmentAndBuff(app.PlayerStatusCalculatorParameter) |  |
+| 6153 | app.PlayerBasicAttackDefenceStatus | (dynamic / loop) | (4.95: off - it only grew) |
+| 6169 | app.PlayerStatusCalculatorParameter | (dynamic / loop) |  |
+| 6461 | app.SmokeDecoy | (dynamic / loop) | (4.93: setTarget / setStay free again) |
+| 6483 | ? | (dynamic / loop) |  |
+| 6657 | app.PlayerInputProcessorDetail | (dynamic / loop) |  |
+| 6665 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla skill never plays |
+| 6683 | app.HumanSkillAvailability | (dynamic / loop) | a shield skill without a shield: usable for MY character while Pactblade is on |
+| 7171 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | (i-0.4) a hit reaction during the chant: the cast stops, the reaction plays |
+| 7549 | app.StatusConditionActionSlipDamage | setDirectDamage(System.Single, System.Boolean, app.StatusConditionInfo) | our poison hurts sk.poisonMul x as much: the game's poison ticks on enemies Caustic Brew p |
+| 7582 | app.PlayerInputProcessorDetail | (dynamic / loop) | (4.05: paid when the acid pours, sk.release) |
+| 7590 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla skill never plays |
+| 7652 | app.DamageRagdollBlow | start(via.behaviortree.ActionArg) |  |
+| 7709 | app.HitController | getReactionDamageType(app.HitController.DamageInfo) | s from the smite look's start; minus = sooner, down to the smite's start (user: a bit soon |
+| 7735 | app.HitController | calcDamageReaction(app.HitController.DamageInfo) |  |
+| 7791 | app.HitController | (dynamic / loop) |  |
+| 8180 | app.PlayerInputProcessorDetail | (dynamic / loop) | the press of the bound skill (or, while binding, whichever skill is pressed next becomes t |
+| 8195 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla skill started any other way (a queued press ...) becomes the smite too - not t |
+| 8814 | app.HumanCatchProcessor | processFinishingMove(app.HitController.DamageInfo, app.Character) |  |
+| 8861 | app.HumanSkillAvailability | (dynamic / loop) | used (a shield skill needs a shield); for MY character and Misty Dive's slot the answer is |
+| 8884 | app.PlayerInputProcessorDetail | (dynamic / loop) |  |
+| 8898 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla skill never plays |
+| 9101 | app.HitController | calcDamageValue(app.HitController.DamageInfo) |  |
+| 9133 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | no jump right after the Burst step (the same Jump press) |
+| 9616 | via.effect.script.ObjectEffectManager2 | (dynamic / loop) |  |
+| 9653 | app.HitController | getReactionDamageType(app.HitController.DamageInfo) |  |
+| 9670 | app.HitController | calcDamageReaction(app.HitController.DamageInfo) |  |
+| 9759 | app.PlayerInputProcessorDetail | (dynamic / loop) |  |
+| 9774 | app.PlayerInputProcessorDetail | (dynamic / loop) | the vanilla skill never plays |
+| 9789 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | Riotous Fury's opening (the rest of Riotous Fury) is refused |
+| 10105 | app.PlayerInputProcessorDetail | (dynamic / loop) | (3.94 user: from a jump too) |
+| 10120 | app.PlayerInputProcessorDetail | (dynamic / loop) | (3.94) in the air the game never gets that far: the button's own entry first (as the beam' |
+| 10132 | app.ActionManager | requestActionCore(app.ActionManager.Priority, System.String, System.UInt32) | the vanilla skill started any other way = Blink Strike; while it plays, Riotous Fury's own |
+| 10172 | app.HitController | calcDamageValue(app.HitController.DamageInfo) | an enemy hits me: the window opens (the attacker kept) |
+| 10695 | app.StatusConditionActionEffectCallEndurance | (dynamic / loop) | (4.17) the status effect call itself: which set / provider / element |
+| 10721 | via.effect.script.ObjectEffectManager2 | (dynamic / loop) | (4.15) which effects the burning target starts (to make its fire green) |
+| 10951 | app.ItemManager | (dynamic / loop) | (saving triggers the builders too) |
+| 10955 | app.ItemManager | (dynamic / loop) |  |
+| 10964 | app.ItemManager | (dynamic / loop) |  |
+| 10996 | app.CampStateBase | (dynamic / loop) |  |
+| 11094 | ? | (dynamic / loop) |  |
+| 11281 | app.StatusConditionCtrl | reqStatusConditionApplyCore(app.StatusConditionDef.StatusConditionEnum, app.HitController.DamageInfo, app.StatusConditionDef.RequestInfo, System.Boolean) |  |
+| 11292 | app.HitController | calcDamageValue(app.HitController.DamageInfo) |  |
+| 11379 | app.HumanSkillAvailability | (dynamic / loop) | (1.1) none free: the game is told Smite / Guise aren't available (greyed out like with too |
 
 ## Appendix B: every per-frame / lifecycle callback
 
 | Line | When | Comment |
 |---|---|---|
-| 29 | draw_ui | (1.0: in a block - the main chunk is at its 200 locals) |
-| 270 | on_frame |  |
-| 303 | pre LateUpdateBehavior |  |
-| 317 | pre LateUpdateBehavior | (3.99) any sudden stamina drop, with the action |
-| 335 | on_frame |  |
-| 455 | on_frame | while walking normally: which side matches the game's own move direction |
-| 482 | script reset | the VSB pick kept over a script reset |
-| 502 | on_frame |  |
-| 574 | on_frame |  |
-| 753 | script reset |  |
-| 798 | pre UpdateBehavior |  |
-| 799 | pre UpdateMotion |  |
-| 800 | pre LateUpdateBehavior |  |
-| 801 | post LateUpdateBehavior |  |
-| 851 | pre LateUpdateBehavior | (3.77) a blast / bolt goes no further than it aims |
-| 1017 | script reset |  |
-| 1115 | script reset |  |
-| 1430 | script reset |  |
-| 1672 | pre LateUpdateBehavior |  |
-| 1766 | pre LateUpdateBehavior | our blast is gone (hit or ended): the bolt stays where it was last put, right at the targe |
-| 2071 | pre LateUpdateBehavior |  |
-| 2169 | pre LateUpdateBehavior |  |
-| 2623 | pre UpdateBehavior |  |
-| 2857 | on_frame |  |
-| 2858 | script reset |  |
-| 3379 | pre UpdateBehavior |  |
-| 3423 | pre BeginRendering |  |
-| 3468 | script reset |  |
-| 3651 | on_frame |  |
-| 3967 | pre UpdateBehavior |  |
-| 4033 | pre UpdateBehavior |  |
-| 4446 | pre LateUpdateBehavior | every frame (the game may set them back) |
-| 4460 | script reset |  |
-| 4664 | pre LateUpdateBehavior |  |
-| 4739 | pre UpdateBehavior |  |
-| 4862 | on_frame |  |
-| 4882 | on_frame | keep it daytime: once it gets dark (19:00-4:59), skip to 10:00 - not while a Pactblade ski |
-| 4899 | post LateUpdateBehavior | (4.92) game time: real time minus menus / pauses (Hellish Rebuke's fire + cooldown, Hex) |
-| 5092 | pre BeginRendering |  |
-| 5153 | on_frame |  |
-| 5159 | post LateUpdateBehavior | after the game's own late update: the clone stays on the spot (no following), frozen in ou |
-| 5848 | pre BeginRendering |  |
-| 5884 | pre BeginRendering |  |
-| 6270 | script reset |  |
-| 6275 | pre UpdateBehavior | (4.81) LEVITATE (Sorcerer's) while the guise is on: in the air, hold jump |
-| 6358 | pre UpdateMotion |  |
-| 6401 | post LateUpdateBehavior | (4.82) our float: the height, every frame |
-| 6582 | pre LateUpdateBehavior |  |
-| 6632 | pre UpdateBehavior |  |
-| 6699 | post LateUpdateBehavior | the real end: meshes back, scale, motion, finish (the warps get the clone back) |
-| 6934 | pre BeginRendering |  |
-| 6946 | on_frame |  |
-| 7123 | on_frame | (children first) |
-| 7129 | script reset |  |
-| 7198 | pre UpdateBehavior |  |
-| 7276 | on_frame |  |
-| 7391 | script reset |  |
-| 7498 | post LateUpdateBehavior |  |
-| 7522 | pre UpdateBehavior | the press: the chant starts as soon as its animations are loaded (first time: a moment) |
-| 7540 | script reset |  |
-| 7657 | pre LateUpdateBehavior |  |
-| 7686 | on_frame | (3.52 test; 3.54: off again) |
-| 7863 | pre BeginRendering | (dark / white / already ours) |
-| 7923 | on_frame | (checked every 5 s: back in if the game threw them out) |
-| 7970 | script reset |  |
-| 8015 | pre LateUpdateBehavior |  |
-| 8050 | pre LateUpdateBehavior | (4.02 user: a hit gives 20 % of max stamina back - after the Arc's full drain) |
-| 8061 | post LateUpdateBehavior | (as DragonCore's consume_stamina, with + instead of -) |
-| 8151 | pre UpdateBehavior |  |
-| 8158 | script reset |  |
-| 8605 | pre UpdateBehavior | (its landing is part of it; then it is over) |
-| 8617 | pre LateUpdateBehavior | (3.51) moved far right after the landing? noted |
-| 8631 | post LateUpdateBehavior | (the lock again after the game moved us this frame) |
-| 8763 | pre LateUpdateBehavior |  |
-| 8784 | pre BeginRendering | my body glow (SkyDive's rim light) in our colour |
-| 8946 | script reset | (our solid pink copies, brightness 1-3) |
-| 9024 | pre LateUpdateBehavior | the X: two diagonals through the enemy's chest, turned to the camera, following it |
-| 9113 | on_frame | debug dots for placing the X |
-| 9140 | pre UpdateBehavior | the Burst step, at the same point as the combo's warps |
-| 9242 | script reset |  |
-| 9493 | pre UpdateBehavior |  |
-| 9501 | pre LateUpdateBehavior | the beam itself, every frame: from the palm to the target, growing, then thinning out |
-| 9587 | on_frame | placement dots: green = palm, red = beam tip, yellow = the mesh beam's anchor |
-| 9863 | script reset |  |
-| 10066 | pre UpdateMotion |  |
-| 10067 | post UpdateMotion |  |
-| 10068 | pre LateUpdateBehavior |  |
-| 10069 | post LateUpdateBehavior |  |
-| 10070 | pre BeginRendering |  |
-| 10071 | pre UpdateBehavior |  |
-| 10379 | on_frame |  |
-| 10503 | pre BeginRendering |  |
-| 10537 | pre BeginRendering |  |
-| 10571 | pre LateUpdateBehavior | (4.26) its flames: the burning one's own effect players |
-| 10644 | pre LateUpdateBehavior | (4.18) its burning effects get our green files |
-| 10676 | pre LateUpdateBehavior | (4.15) the fire after the flinch |
-| 10773 | pre LateUpdateBehavior | (4.14) the flash's material mode ends |
-| 10779 | pre LateUpdateBehavior | the sparks follow the palm, then go |
-| 10789 | pre UpdateBehavior |  |
-| 10814 | on_frame | (4.13) the Mage cast bank (9112) kept on me while Pactblade is on |
-| 10826 | pre UpdateMotion | the clip on the layer, at our time (AnimPlayer's way) |
-| 10967 | script reset |  |
-| 10970 | on_frame | lets go by itself after 5 s - a save / an upload build takes far less |
-| 11223 | post LateUpdateBehavior |  |
-| 11252 | on_frame | every new one noted by name |
-| 11315 | draw_ui |  |
+| 30 | draw_ui | (1.0: in a block - the main chunk is at its 200 locals) |
+| 271 | on_frame |  |
+| 305 | pre LateUpdateBehavior |  |
+| 319 | pre LateUpdateBehavior | (3.99) any sudden stamina drop, with the action |
+| 337 | on_frame |  |
+| 457 | on_frame | while walking normally: which side matches the game's own move direction |
+| 484 | script reset | the VSB pick kept over a script reset |
+| 504 | on_frame |  |
+| 576 | on_frame |  |
+| 755 | script reset |  |
+| 800 | pre UpdateBehavior |  |
+| 801 | pre UpdateMotion |  |
+| 802 | pre LateUpdateBehavior |  |
+| 803 | post LateUpdateBehavior |  |
+| 853 | pre LateUpdateBehavior | (3.77) a blast / bolt goes no further than it aims |
+| 1019 | script reset |  |
+| 1117 | script reset |  |
+| 1432 | script reset |  |
+| 1674 | pre LateUpdateBehavior |  |
+| 1768 | pre LateUpdateBehavior | our blast is gone (hit or ended): the bolt stays where it was last put, right at the targe |
+| 2073 | pre LateUpdateBehavior |  |
+| 2171 | pre LateUpdateBehavior |  |
+| 2625 | pre UpdateBehavior |  |
+| 2859 | on_frame |  |
+| 2860 | script reset |  |
+| 3381 | pre UpdateBehavior |  |
+| 3425 | pre BeginRendering |  |
+| 3470 | script reset |  |
+| 3653 | on_frame |  |
+| 3969 | pre UpdateBehavior |  |
+| 4035 | pre UpdateBehavior |  |
+| 4448 | pre LateUpdateBehavior | every frame (the game may set them back) |
+| 4462 | script reset |  |
+| 4666 | pre LateUpdateBehavior |  |
+| 4741 | pre UpdateBehavior |  |
+| 4864 | on_frame |  |
+| 4884 | on_frame | keep it daytime: once it gets dark (19:00-4:59), skip to 10:00 - not while a Pactblade ski |
+| 4901 | post LateUpdateBehavior | (4.92) game time: real time minus menus / pauses (Hellish Rebuke's fire + cooldown, Hex) |
+| 5094 | pre BeginRendering |  |
+| 5155 | on_frame |  |
+| 5161 | post LateUpdateBehavior | after the game's own late update: the clone stays on the spot (no following), frozen in ou |
+| 5850 | pre BeginRendering |  |
+| 5886 | pre BeginRendering |  |
+| 6272 | script reset |  |
+| 6277 | pre UpdateBehavior | (4.81) LEVITATE (Sorcerer's) while the guise is on: in the air, hold jump |
+| 6360 | pre UpdateMotion |  |
+| 6403 | post LateUpdateBehavior | (4.82) our float: the height, every frame |
+| 6584 | pre LateUpdateBehavior |  |
+| 6637 | pre UpdateBehavior |  |
+| 6704 | post LateUpdateBehavior | the real end: meshes back, scale, motion, finish (the warps get the clone back) |
+| 6939 | pre BeginRendering |  |
+| 6951 | on_frame |  |
+| 7128 | on_frame | (children first) |
+| 7134 | script reset |  |
+| 7203 | pre UpdateBehavior |  |
+| 7281 | on_frame |  |
+| 7396 | script reset |  |
+| 7503 | post LateUpdateBehavior |  |
+| 7527 | pre UpdateBehavior | the press: the chant starts as soon as its animations are loaded (first time: a moment) |
+| 7545 | script reset |  |
+| 7662 | pre LateUpdateBehavior |  |
+| 7691 | on_frame | (3.52 test; 3.54: off again) |
+| 7868 | pre BeginRendering | (dark / white / already ours) |
+| 7928 | on_frame | (checked every 5 s: back in if the game threw them out) |
+| 7975 | script reset |  |
+| 8020 | pre LateUpdateBehavior |  |
+| 8055 | pre LateUpdateBehavior | (4.02 user: a hit gives 20 % of max stamina back - after the Arc's full drain) |
+| 8066 | post LateUpdateBehavior | (as DragonCore's consume_stamina, with + instead of -) |
+| 8157 | pre UpdateBehavior |  |
+| 8164 | script reset |  |
+| 8613 | pre UpdateBehavior | (its landing is part of it; then it is over) |
+| 8625 | pre LateUpdateBehavior | (3.51) moved far right after the landing? noted |
+| 8639 | post LateUpdateBehavior | (the lock again after the game moved us this frame) |
+| 8771 | pre LateUpdateBehavior |  |
+| 8792 | pre BeginRendering | my body glow (SkyDive's rim light) in our colour |
+| 8954 | script reset | (our solid pink copies, brightness 1-3) |
+| 9032 | pre LateUpdateBehavior | the X: two diagonals through the enemy's chest, turned to the camera, following it |
+| 9121 | on_frame | debug dots for placing the X |
+| 9148 | pre UpdateBehavior | the Burst step, at the same point as the combo's warps |
+| 9250 | script reset |  |
+| 9501 | pre UpdateBehavior |  |
+| 9509 | pre LateUpdateBehavior | the beam itself, every frame: from the palm to the target, growing, then thinning out |
+| 9595 | on_frame | placement dots: green = palm, red = beam tip, yellow = the mesh beam's anchor |
+| 9871 | script reset |  |
+| 10074 | pre UpdateMotion |  |
+| 10075 | post UpdateMotion |  |
+| 10076 | pre LateUpdateBehavior |  |
+| 10077 | post LateUpdateBehavior |  |
+| 10078 | pre BeginRendering |  |
+| 10079 | pre UpdateBehavior |  |
+| 10387 | on_frame |  |
+| 10511 | pre BeginRendering |  |
+| 10545 | pre BeginRendering |  |
+| 10579 | pre LateUpdateBehavior | (4.26) its flames: the burning one's own effect players |
+| 10652 | pre LateUpdateBehavior | (4.18) its burning effects get our green files |
+| 10684 | pre LateUpdateBehavior | (4.15) the fire after the flinch |
+| 10781 | pre LateUpdateBehavior | (4.14) the flash's material mode ends |
+| 10787 | pre LateUpdateBehavior | the sparks follow the palm, then go |
+| 10797 | pre UpdateBehavior |  |
+| 10822 | on_frame | (4.13) the Mage cast bank (9112) kept on me while Pactblade is on |
+| 10834 | pre UpdateMotion | the clip on the layer, at our time (AnimPlayer's way) |
+| 10975 | script reset |  |
+| 10978 | on_frame | lets go by itself after 5 s - a save / an upload build takes far less |
+| 11231 | post LateUpdateBehavior |  |
+| 11260 | on_frame | every new one noted by name |
+| 11428 | on_frame |  |
+| 11489 | draw_ui |  |

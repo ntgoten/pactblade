@@ -1,4 +1,4 @@
-# Pactblade - guide for an AI agent (state: release 1.0.2, 2026-10-25)
+# Pactblade - guide for an AI agent (state: release 1.1, 2026-10-25)
 
 Purpose: everything an agent needs to rebuild, extend or debug the Pactblade custom vocation for Dragon's Dogma 2
 (post-DLC PC build) without re-discovering it. Dense on purpose. Companion for humans: PACTBLADE_MODDER_GUIDE.md; code-level reference (hooks, tables, game calls, excerpts,
@@ -115,7 +115,7 @@ history, newest at the bottom - grep it, don't read it whole), HANDOFF.md (older
 | Eldritch Blast | ShieldSummons | ground: Riotous Fury's opening Job01_BravesRaidStart (fire at frame 57, x1.5 until then); air: Job07_MagicBindComplete (fire at 0.3 s, button entry hook) | beam = a ROW of frozen copies of the Golem hand flash (pb_beamrowf) palm -> target, grows 0.1 s, holds 0.45 s; hit = our pb_40/43 copies + directDamage magick x3.5 (Hitback_M, power 300); animation effects killed on the ground; air keeps them except 13/20/56 (big swirl) and tints the charge cloud 0/160/0; launch flash at the palm x0.3; 200 stamina (the game's 480 swapped in a StaminaManager.add pre-hook) |
 | Archfey Combo | BravesRaid | Kite Arrow Job02_StartFlightShot 0-71.6 -> warp to a side -> Job01_RushAttack 34-67 -> warp behind -> Job01_RushAttackFinish 25-54 -> warp above the head -> Job01_EndRisingLunge -> game landing | dynamic warp spots on a cross around the target (opposite side first, then unused sides); each warp: wisps (weapon element 30 via a hidden Stalwart Sword donor) + Mystic Spearhand afterimage clone at the departure spot (AfterImageHandler init(false)+start, pinned, joint-pose snapshot, purple) + Blink Behind cues; Kite Arrow follow-ups refused; the Rush parts' dust killed; opening turns to the target (360 deg/s, 12 m, 70 deg); 250 stamina |
 | Eldritch Smite | BlinkStrike | Job05_ShortRangeHeavyAttack 0-66.6 -> Job05_ArcOfObliterationEnd from 50 (crossfade 12 frames), x1.5 from 150 to 347 | part 2 boosts the Nox blade glow x2.5 + a 2nd shimmer; first melee hit in part 2 -> our explosion copy -1/8/43 x2.5 at the victim; knock-down: Slam_L at power x150 on living enemies; on a KILL no forced Slam (DamageRagdollBlow: IsBlownWithAttackVelocity false, ragdoll velocity limit 2.5 for 2 s) so loot doesn't fly; own sounds (charge 199459528, hit 3434957627); full drain + 20 % back on a hit |
-| Tasha's Otherworldly Guise | DivineDefense | Caustic Brew's chant | see 4.1; 60 s (game clock, paused in menus), 50 % stamina, recast renews |
+| Tasha's Otherworldly Guise | DivineDefense | Caustic Brew's chant | see 4.1; 60 s (game clock, paused in menus), a spell slot + 25 % stamina at gu.release, recast renews (and uses a slot) |
 
 ### 4.1 Otherworldly Guise
 - Clone = Trickster decoy `Human.<Job09ActionCtrl>.<DecoyHandler>` (create() if no Instance; init(false)+start). NEVER
@@ -143,6 +143,23 @@ history, newest at the bottom - grep it, don't read it whole), HANDOFF.md (older
 - Known: the decoy's gold dissolve can linger where the guise ended (cleared by the next cast); rest doesn't end it
   (hooks on BarRoomTimeSkipStateBase/CampStateBase 'restart' never fire - candidate states:
   BarRoomTimeSkipStateFinish.onBarRoomTimeSkipStart, CampStateResetCharacterStatus.onCampStart - untested).
+
+### 4.2 Spell slots (1.1)
+- `dbg.slots` (block at the end of the file): `max = min(5, 1 + floor(level / 15))`, level = `a.character:get_Human()["<StatusContext>k__BackingField"]:call("get_Level")`
+  (read every 1 s); `used`; sequential recharge `rechargeAt = dbg.gclock() + 20`. `SL.use()` (false = none free),
+  `SL.free()`, `SL.deny()` (red flash), `SL.fill()`.
+- Smite: `sm.press` calls `SL.use()` before `sm.want`. Guise: `gu.press` needs `SL.free() >= 1`, `gu.release` calls
+  `SL.use()` (fizzles without). Stamina: Guise `gu.skill.staminaPct = 0.25`; Smite part 2 sets
+  `dbg.stamSwap = { mul = 0.5 }` (the StaminaManager.add pre-hook halves the Arc's big drain).
+- Greyed out: hooks on `HumanSkillAvailability.isCustomSkillAvailable(+WithoutItemCondition)(HumanCustomSkillID)`: for
+  the player's availability object (`live.avail`) and a VSB id whose adapter kind is smite / guise, when `used >= max`
+  the post returns `sdk.to_ptr(0)`.
+- HUD: `re.on_frame` + `draw.filled_circle` / `draw.filled_rect`; screen size `imgui.get_display_size()`; hidden when
+  not active or `GuiManager:isPausedGUI()`. Layers per slot: shadow 1.14r, bronze rim r / 0.88r / 0.78r, core 0.71r,
+  gem 0.66r / 0.55r / 0.38r (ABGR 0xFF6B1D4B / 0xFF9C2C6D / 0xFFC9559A) + shine; ready: breathing halo, orbiting light
+  with a 5-dot tail; used: `SL.fade` (swell x1.45, alpha to 0 in 0.6 s); recharging: `moon(cx, cy, g, p, col)` = 1 px
+  strips from `-half` to `half * (1 - 2p)` (waxing from the left); refilled: `SL.flash` 1 s bloom. Settings in
+  `Pactblade_slots.json` (`SL.menu()` in the release and test menus; the file is in the release json KEEP list).
 
 ## 5. Effects pipeline (how every purple effect was made)
 1. Find the effect: Recorder (test menu Debug) -> data/Pactblade_chant_record.json lists every effect id

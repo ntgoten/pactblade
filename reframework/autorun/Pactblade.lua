@@ -6,7 +6,7 @@
 --   * Blast damage = the hit's magick base x Magick Bolt's attack multiplier x the passive's magick bonus x 5 / 10.
 --   * Passive on all your other hits: magick part x1.5 (physical part unchanged).
 -- Nothing is written into the save; Reset scripts or removing the file undoes everything.
-local NAME, VERSION = "Pactblade", "1.0.2"
+local NAME, VERSION = "Pactblade", "1.1"
 local DATA = "Pactblade.json"
 -- (1.0) RELEASE (json.RELEASE): the short menu, and of the data files only the ones Pactblade needs are written.
 -- A test build: RELEASE = false below (the full test menu + the debug dumps). (No extra main-chunk locals: 200 max.)
@@ -15,7 +15,8 @@ do
     local RELEASE = true
     if RELEASE then
         local KEEP = { [DATA] = true, ["Pactblade_guise_items.json"] = true, ["Pactblade_vsb_pick.json"] = true,
-                       ["Pactblade_guise_sounds.json"] = true, ["Pactblade_trace.json"] = true }
+                       ["Pactblade_guise_sounds.json"] = true, ["Pactblade_trace.json"] = true,
+                       ["Pactblade_slots.json"] = true }
         local real = json
         json = setmetatable({ RELEASE = true,
             dump_file = function(name, ...) if KEEP[name] then return real.dump_file(name, ...) end return true end },
@@ -291,9 +292,10 @@ pcall(function()   -- (4.04) a skill's own big drain swapped for our cost (dbg.s
             if v > -300 then return end
             local me = runtime.player().character:get_StaminaManager()
             if sdk.to_managed_object(args[2]):get_address() ~= me:get_address() then return end
-            args[3] = sdk.float_to_ptr(-w.cost)
+            local cost = w.mul and (-v * w.mul) or w.cost   -- (1.1: w.mul = a share of the game's own drain)
+            args[3] = sdk.float_to_ptr(-cost)
             dbg.stamSwap = nil
-            note(("stamina: the game's %.0f swapped for %.0f (%s)"):format(-v, w.cost, w.what))
+            note(("stamina: the game's %.0f swapped for %.0f (%s)"):format(-v, cost, w.what))
         end)
     end, function(r) return r end)
 end)
@@ -6584,7 +6586,8 @@ end)
     end)
 
     -- (4.61) THE SKILL: Perfect Defense / Divine Defense's slot -> Caustic Brew's chant -> the guise for 60 s
-    gu.skill = { on = true, secs = 60, staminaPct = 0.50, info = "-", lastPress = -10 }
+    gu.skill = { on = true, secs = 60, staminaPct = 0.25,   -- (1.1 user: half)
+                  info = "-", lastPress = -10 }
     local DIVINE = -1
     pcall(function()
         for _, f in ipairs(sdk.find_type_definition("app.HumanCustomSkillID"):get_fields()) do
@@ -6601,10 +6604,12 @@ end)
         local can = false
         pcall(function() local track = a.character:get_Human().Track; can = track.All or track.Skill end)
         if not can then sk2.info = "not now (the game's skill track is closed)"; return end
+        if dbg.slots and dbg.slots.free() < 1 then dbg.slots.deny(); sk2.info = "no spell slot free"; note("Otherworldly Guise: no spell slot free"); return end   -- (1.1)
         pcall(gu.prepare, a)   -- the decoy made now, ready by the release
         sk2.lastPress, gu.castWant, gu.castWantT = now, true, now
     end
-    function gu.release(a)   -- the chant is over: 50 % stamina, the guise on (or renewed)
+    function gu.release(a)   -- the chant is over: a spell slot, 25 % stamina, the guise on (or renewed)
+        if dbg.slots and not dbg.slots.use() then dbg.slots.deny(); note("Otherworldly Guise: no spell slot free at the release - fizzled"); return end   -- (1.1)
         pcall(function()
             local smg = a.character:get_StaminaManager()
             local b0, cost = smg:get_RemainingAmount(), smg:get_MaxValue() * gu.skill.staminaPct
@@ -8086,6 +8091,7 @@ local function stage(a, k)
     sm.stage, sm.asked, sm.started, sm.framed, sm.fastOn = k, os.clock(), nil, false, false
     if k == 1 then sm.boomed, sm.looked, sm.lookEndAt, sm.chargeAt, sm.chargeSet = false, false, nil, nil, false; pcall(sm.load_sounds, a) end
     if k == 2 then
+        dbg.stamSwap = { mul = sm.drainMul or 0.5, untilT = os.clock() + 1.5, what = "Eldritch Smite (half the Arc's drain)" }   -- (1.1 user)
         if not dbg.NOX.boosted then pcall(dbg.nox_boost, true) end   -- (on since 0.3 s into part 1)
         pcall(dbg.rim_glow, a, true)   -- (user: Mystic Spearhand's whole-body charge look, our colour)
     end
@@ -8164,7 +8170,9 @@ function sm.press()
         local track = runtime.player().character:get_Human().Track
         can = track.All or track.Skill
     end)
-    if can then sm.lastPress, sm.want = now, true end
+    if not can then return end
+    if dbg.slots and not dbg.slots.use() then dbg.slots.deny(); note("Eldritch Smite: no spell slot free"); return end   -- (1.1)
+    sm.lastPress, sm.want = now, true
 end
 -- the press of the bound skill (or, while binding, whichever skill is pressed next becomes the slot)
 pcall(function()
@@ -11312,6 +11320,172 @@ end)()
     end)
 end)()
 
+
+------------------------------------------------------------------------
+-- (1.1) SPELL SLOTS (user): 1 at level 1, +1 every 15 levels, max 5; Eldritch Smite and Otherworldly Guise use one;
+-- they come back one after another, 20 s each (game clock: not in menus). HUD: a row of circles - thick gold ring,
+-- black core, purple when full; the recharging one fills up from the middle. (The skills' use of slots comes next.)
+------------------------------------------------------------------------
+;(function()
+    local SL = { used = 0, max = 1, level = 1, rechargeAt = nil, RECHARGE = 20, nextLevel = 0,
+                 x = 0.497, y = 0.976, size = 1.0, gap = 2.6, show = true }   -- (1.1 user: 3 areas to try; x/y = the row's centre)
+    SL.SPOTS = { { "under the stamina bar (blue)", 0.497, 0.976 }, { "under the pawn commands (red)", 0.201, 0.973 },
+                 { "bottom-left corner (green)", 0.054, 0.967 } }
+    dbg.slots = SL
+    local SAVE = "Pactblade_slots.json"   -- (1.1) the display settings (on / position / size), the player's own
+    pcall(function()
+        local t = json.load_file(SAVE)
+        if type(t) ~= "table" then return end
+        for _, k in ipairs({ "x", "y", "size", "gap" }) do if type(t[k]) == "number" then SL[k] = t[k] end end
+        if type(t.show) == "boolean" then SL.show = t.show end
+    end)
+    function SL.save() pcall(json.dump_file, SAVE, { x = SL.x, y = SL.y, size = SL.size, gap = SL.gap, show = SL.show }) end
+    function SL.menu()   -- the player's options (release + test menu)
+        local c, any = nil, false
+        c, SL.show = imgui.checkbox("Spell slots on the HUD", SL.show); any = any or c
+        for k, sp in ipairs(SL.SPOTS) do
+            if imgui.button(sp[1]:gsub(" %(%a+%)$", "") .. "##slspot" .. k) then SL.x, SL.y, any = sp[2], sp[3], true end
+            if k < #SL.SPOTS then imgui.same_line() end
+        end
+        c, SL.size = imgui.slider_float("size##slsize", SL.size, 0.5, 2.5, "%.2f"); any = any or c
+        if any then SL.save() end
+    end
+    local function clock() return dbg.gclock and dbg.gclock() or os.clock() end
+    function SL.refresh()
+        if os.clock() < SL.nextLevel then return end
+        SL.nextLevel = os.clock() + 1.0
+        pcall(function()
+            local a = runtime.player()
+            local sc = a.character:get_Human()["<StatusContext>k__BackingField"]
+            SL.level = tonumber(sc:call("get_Level")) or SL.level
+        end)
+        SL.max = math.max(1, math.min(5, 1 + math.floor((SL.level or 1) / 15)))
+        if SL.used > SL.max then SL.used = SL.max end
+    end
+    function SL.free() return SL.max - SL.used end
+    function SL.use()   -- true = one was free and is now used
+        SL.refresh()
+        if SL.used >= SL.max then return false end
+        SL.fade = { idx = SL.max - SL.used, t0 = os.clock() }   -- (the rightmost full one fades away)
+        SL.used = SL.used + 1
+        if not SL.rechargeAt then SL.rechargeAt = clock() + SL.RECHARGE end
+        return true
+    end
+    function SL.fill() SL.used, SL.rechargeAt = 0, nil end
+    function SL.deny() SL.deniedAt = os.clock() end   -- a press with no slot free: the row flashes red
+    -- (1.1) none free: the game is told Smite / Guise aren't available (greyed out like with too little stamina)
+    for _, mname in ipairs({ "isCustomSkillAvailable(app.HumanCustomSkillID)", "isCustomSkillAvailableWithoutItemCondition(app.HumanCustomSkillID)" }) do
+        pcall(function()
+            sdk.hook(sdk.find_type_definition("app.HumanSkillAvailability"):get_method(mname), function(args)
+                local st = thread.get_hook_storage()
+                st.pbNoSlot = nil
+                if not live.on or not live.avail or sdk.to_int64(args[2]) ~= live.avail then return end
+                if SL.used < SL.max then return end
+                local A = dbg.adapter
+                local e = A and A.map and A.map[sdk.to_int64(args[3]) & 0xFFFFFFFF]
+                if e and (e.kind == "smite" or e.kind == "guise") then st.pbNoSlot = true end
+            end, function(r)
+                local st = thread.get_hook_storage()
+                if st.pbNoSlot then st.pbNoSlot = nil; return sdk.to_ptr(0) end
+                return r
+            end)
+        end)
+    end
+    local function tick()
+        if SL.rechargeAt and clock() >= SL.rechargeAt then
+            SL.used = math.max(0, SL.used - 1)
+            SL.rechargeAt = SL.used > 0 and clock() + SL.RECHARGE or nil
+            SL.flash = { idx = SL.max - SL.used, t0 = os.clock() }   -- (1.1 user: the refilled one glows up for a second)
+        end
+    end
+    -- colours are ABGR (0xAABBGGRR) - the game's HUD style: engraved bronze rims, dark see-through cores, muted violet
+    local SHADOW, GLOW = 0x90000000, 0x2EC9559A
+    local RIM_DARK, RIM_LIGHT, RIM_INNER, CORE = 0xFF30556B, 0xFF6AA9C9, 0xFF26455A, 0xE60A0D12
+    local GEM = { { 0.66, 0xFF6B1D4B }, { 0.55, 0xFF9C2C6D }, { 0.38, 0xFFC9559A } }
+    local SHINE = 0xE6F2B3D9
+    local ORBIT = 0xFFE08AF0
+    local function alpha(col, a) return (math.floor(math.max(0, math.min(1, a)) * ((col >> 24) & 0xFF)) << 24) | (col & 0xFFFFFF) end
+    -- the moon phase: the lit part of a disk of radius g, p 0 (new) .. 1 (full), waxing from the LEFT (user); 1 px strips
+    local function moon(cx, cy, g, p, col)
+        local n = math.max(2, math.floor(g))
+        for k = -n, n do
+            local y = k / n * g
+            local half = math.sqrt(math.max(0, g * g - y * y))
+            local xt = half * (1 - 2 * p)   -- the terminator (an ellipse across the disk)
+            if half - xt > 0.05 then draw.filled_rect(cx - half, cy + y - g / n * 0.5, half - xt, g / n + 0.6, col) end
+        end
+    end
+    local function screen_size()
+        local w, h = 1920, 1080
+        pcall(function() local v = imgui.get_display_size(); if v and v.x > 0 then w, h = v.x, v.y end end)
+        return w, h
+    end
+    local function paused()
+        local p = false
+        pcall(function() local gm = sdk.get_managed_singleton("app.GuiManager"); if gm and gm:call("isPausedGUI") then p = true end end)
+        return p
+    end
+    re.on_frame(function()
+        if not live.on then return end
+        SL.refresh()
+        tick()
+        if not SL.show or paused() then return end
+        pcall(function()
+            local w, h = screen_size()
+            local r = h * 0.0095 * SL.size
+            local free = SL.free()
+            local x0 = w * SL.x - (SL.max - 1) * r * SL.gap / 2   -- the row centred on the spot
+            local y0 = h * SL.y
+            local prog = 0
+            if SL.rechargeAt then prog = math.max(0, math.min(1, 1 - (SL.rechargeAt - clock()) / SL.RECHARGE)) end
+            local deny = SL.deniedAt and (os.clock() - SL.deniedAt) / 0.5 or 1
+            for i = 1, SL.max do
+                local cx, cy = x0 + (i - 1) * r * SL.gap, y0
+                if deny < 1 then draw.filled_circle(cx, cy, r * 1.45, alpha(0xC02020E0, 1 - deny), 40) end   -- no slot free: red
+                local full = i <= free
+                local k = full and 1 or ((i == free + 1 and SL.rechargeAt) and prog or 0)
+                local now = os.clock()
+                local breathe = 0.65 + 0.35 * math.sin(now * 2.2 + i * 1.3)
+                if full then draw.filled_circle(cx, cy, r * (1.38 + 0.10 * breathe), alpha(GLOW, breathe), 40) end   -- breathing halo
+                draw.filled_circle(cx, cy, r * 1.14, SHADOW, 40)
+                draw.filled_circle(cx, cy, r, RIM_DARK, 40)              -- the engraved rim: dark - light - dark
+                draw.filled_circle(cx, cy, r * 0.88, RIM_LIGHT, 40)
+                draw.filled_circle(cx, cy, r * 0.78, RIM_INNER, 40)
+                draw.filled_circle(cx, cy, r * 0.71, CORE, 40)           -- the dark core
+                if full then
+                    for _, g in ipairs(GEM) do draw.filled_circle(cx, cy, r * g[1], g[2], 40) end
+                    draw.filled_circle(cx - r * 0.20, cy - r * 0.22, r * 0.13, SHINE, 20)
+                    local ang = now * 2.4 + i * 1.9                      -- a light running round the rim, with a tail
+                    for t = 0, 4 do
+                        local a2 = ang - t * 0.22
+                        draw.filled_circle(cx + math.cos(a2) * r * 0.86, cy + math.sin(a2) * r * 0.86, r * (0.16 - t * 0.025), alpha(ORBIT, 1 - t * 0.2), 16)
+                    end
+                elseif k > 0 then                                        -- recharging: the moon's phases
+                    for _, g in ipairs(GEM) do moon(cx, cy, r * g[1], k, g[2]) end
+                end
+                local fl = SL.flash
+                if fl and fl.idx == i then                               -- just refilled: a glow that blooms out and fades
+                    local t = (now - fl.t0) / 1.0
+                    if t >= 1 then SL.flash = nil
+                    else
+                        draw.filled_circle(cx, cy, r * (1.2 + 1.0 * t), alpha(0x66E08AF0, 1 - t), 40)
+                        draw.filled_circle(cx, cy, r * (1.1 + 0.5 * t), alpha(0x88F2B3D9, 1 - t), 40)
+                        draw.filled_circle(cx, cy, r * 0.62, alpha(0xFFF2C8F5, (1 - t) * 0.8), 40)   -- the gem shining bright
+                    end
+                end
+                local f = SL.fade
+                if f and f.idx == i then                                 -- just used: the gem swells and fades away
+                    local t = (now - f.t0) / 0.6
+                    if t >= 1 then SL.fade = nil
+                    else
+                        for _, g in ipairs(GEM) do draw.filled_circle(cx, cy, r * g[1] * (1 + 0.45 * t), alpha(g[2], 1 - t), 40) end
+                    end
+                end
+            end
+        end)
+    end)
+end)()
+
 re.on_draw_ui(function()
     if not imgui.tree_node(NAME .. " " .. VERSION) then return end
     for _, c in ipairs(THEME) do imgui.push_style_color(c[1], c[2]) end
@@ -11339,6 +11513,7 @@ re.on_draw_ui(function()
         if ch then save_cfg() end
         ch, cfg.glow = imgui.checkbox("Arm effect", cfg.glow)
         if ch then save_cfg() end
+        if dbg.slots then pcall(dbg.slots.menu) end   -- (1.1)
         if imgui.tree_node("Dimension Door") then
             if dbg.dd then pcall(dbg.dd.draw) else imgui.text("Dimension Door not loaded: " .. tostring(dbg.ddErr)) end
             imgui.tree_pop()
@@ -11649,6 +11824,23 @@ re.on_draw_ui(function()
             chh, hr.boomSound = imgui.checkbox("its sound (hellishrebukesfx 6-8 s)##hr", hr.boomSound)
             chh, hr.sparkScale = imgui.slider_float("spark size##hr", hr.sparkScale, 0.05, 1.5, "%.2f")
             chh, hr.flash = imgui.checkbox("'charge finished' body flash + sound at the cast##hr", hr.flash)
+            imgui.tree_pop()
+        end
+        if imgui.tree_node("Spell slots (HUD test)") then   -- (1.1)
+            pcall(function()
+                local SL, c = dbg.slots, nil
+                SL.refresh()
+                imgui.text(("level %d -> %d slot(s), %d used, next back in %s"):format(SL.level or 0, SL.max, SL.used,
+                    SL.rechargeAt and ("%.1f s"):format(SL.rechargeAt - dbg.gclock()) or "-"))
+                if imgui.button("use a slot##sl") then SL.use() end
+                imgui.same_line()
+                if imgui.button("refill##sl") then SL.fill() end
+                SL.menu()
+                c, SL.x = imgui.slider_float("centre x (of the screen width)##sl", SL.x, 0, 1, "%.3f")
+                c, SL.y = imgui.slider_float("centre y (of the screen height)##sl", SL.y, 0, 1, "%.3f")
+                c, SL.gap = imgui.slider_float("spacing##sl", SL.gap, 2.0, 5.0, "%.2f")
+                if imgui.button("save position##sl") then SL.save() end
+            end)
             imgui.tree_pop()
         end
         if imgui.tree_node("Misty Strike") then

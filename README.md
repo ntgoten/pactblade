@@ -4,7 +4,7 @@ A custom vocation for Dragon's Dogma 2: a pact-bound swordsman with a fast, magi
 eldritch magick in the other. No shield. Inspired by the D&D 5e warlock (names only).
 
 Pactblade is built on **Vocation & Skill Builder (VSB)** as a Fighter vocation and runs as a REFramework script.
-Play it as Fighter, or as Warfarer with a sword. Version **1.0.2**.
+Play it as Fighter, or as Warfarer with a sword. Version **1.1**.
 
 **Download:** the zip from [Releases](../../releases) - it includes the effect / sound pak, which is not in the source here.
 
@@ -65,11 +65,21 @@ Learned at the Vocation Guild with Discipline (DCP), equipped like any weapon sk
 | Misty Dive | 3 | 800 | Vanish into mist and plunge down on a foe from above. Works from the air. On a big monster you land on its body. |
 | Eldritch Blast | 5 | 1500 | A searing beam of eldritch energy from your off hand. Works from the air. |
 | Archfey Combo | 7 | 2500 | A fey-born flurry: vanish and strike from every side in quick succession. |
-| Eldritch Smite | 8 | 3000 | A crushing two-part overhead blow that knocks even great foes to the ground. |
-| Tasha's Otherworldly Guise | 9 | 4000 | A spectral armour from beyond for 60 s (see below). Costs half your stamina. |
+| Eldritch Smite | 8 | 3000 | A crushing two-part overhead blow that knocks even great foes to the ground. Uses a **spell slot**. |
+| Tasha's Otherworldly Guise | 9 | 4000 | A spectral armour from beyond for 60 s (see below). Uses a **spell slot** and a quarter of your stamina. |
 
 Each skill has a second level for 100 DCP at the same rank (it's there for the game's skill menus; it doesn't change
 the skill). A hit strong enough to make you flinch or fall interrupts a chant (Caustic Brew, Guise).
+
+## Spell slots
+
+Like a warlock's pact magic: **Eldritch Smite** and **Tasha's Otherworldly Guise** each use a spell slot.
+- You have **1 slot at level 1**, one more every 15 levels (15, 30, 45, 60), **at most 5**.
+- A used slot comes back after **20 s**; several come back one after another. Menus don't count.
+- With no slot free, the two skills are greyed out and can't be used. The Guise uses its slot when the spell takes
+  effect, so an interrupted chant costs none. Renewing an active Guise uses one too.
+- **On the HUD:** a row of circles under the stamina bar - a violet gem when the slot is ready, empty when used, and it
+  grows back like the phases of the moon while recharging. The position (3 choices), size and on/off are in the menu.
 
 **Tasha's Otherworldly Guise** (60 s, paused in menus):
 - +20 % Defense and Magick Defense (on the status screen)
@@ -101,6 +111,11 @@ Jump
 
 ## Changelog
 
+**1.1**
+- Spell slots for Eldritch Smite and Tasha's Otherworldly Guise (1 at level 1, +1 every 15 levels, max 5, 20 s
+  recharge each), shown on the HUD; the two skills are greyed out when none is free.
+- Otherworldly Guise costs a quarter of your stamina (was half); Eldritch Smite's stamina drain is halved.
+
 **1.0.2**
 - Upgraded swords (with their own item data) now get Magick = Strength and Thunder too - before, only unupgraded
   swords did, so Eldritch Bolt / Blast / Slash's wave were very weak with them.
@@ -118,7 +133,7 @@ Jump
 
 ## Settings
 
-REFramework menu (Insert) → Script Generated UI → **Pactblade 1.0**: Nox sword look on/off, arm effect on/off, and
+REFramework menu (Insert) → Script Generated UI → **Pactblade 1.1**: Nox sword look on/off, arm effect on/off, the spell slot display (on/off, position, size), and
 **Dimension Door** (on/off, also for other vocations, the key, range, how long a door stays open, the door's look).
 
 ## Safe for your save and online

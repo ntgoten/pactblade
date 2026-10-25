@@ -383,12 +383,14 @@ on the way and how they were solved. Times and frames are the tuned values.
 - **Kills:** a huge knock-down power on the **killing** blow made the body fly away (loot lost). On a kill there's no
   forced knock-down, and for 2 s the death ragdoll's launch velocity is limited.
 - **Sounds:** own audio (charge and hit), built into an own sound bank.
-- **Stamina:** Arc of Obliteration's full drain, 20 % of max back on a hit.
+- **Stamina:** half of Arc of Obliteration's drain (the drain is caught in a stamina hook and halved), 20 % of max
+  back on a hit. Uses a spell slot (5.15).
 
 ### 5.12 Tasha's Otherworldly Guise
 - **Idea:** a spectral armour from beyond: defence, resistances, levitation. Visually: a ghostly copy of a different
   armour (Grand Cuirass + Raptor Claws by default) over your own, a bit bigger, see-through.
-- **Cast:** the Caustic Brew chant; 50 % stamina; 60 s (a game clock that stops in menus); a recast renews it.
+- **Cast:** the Caustic Brew chant; a spell slot (5.15) and 25 % stamina when the spell takes effect; 60 s (a game
+  clock that stops in menus); a recast renews it.
 - **The ghost = a clone:**
   - Our own clone handler crashed the game. The Spearhand's afterimage is shared with the warps. The **Trickster's decoy**
     (`DecoyHandler`, the game's own) works: created once if missing, started, then kept alive every frame (its timer and
@@ -433,6 +435,27 @@ on the way and how they were solved. Times and frames are the tuned values.
   moves over the shoulder while aiming. Press again: a door of frost shimmer opens next to you; walk through it and the
   camera flies to the destination, where a second door opens and you step out. Holding the vocation button + d-pad up
   cancels a charging Eldritch Bolt.
+
+---
+
+### 5.15 Spell slots
+- **Idea:** like a warlock's pact magic, the two strongest skills (Smite and Guise) need a spell slot: 1 at level 1, +1
+  every 15 levels, at most 5; a used slot comes back after 20 s, one after another.
+- **The rule:** the level is read from the character's status (`Human.<StatusContext>.get_Level()`), slots =
+  `min(5, 1 + floor(level / 15))`. A slot is used when Smite starts, and when the Guise takes effect (after its chant,
+  so an interrupted chant costs none; a renewal too). The recharge runs on the game clock that stops in menus.
+- **Greyed out like the game does it:** the game asks `HumanSkillAvailability.isCustomSkillAvailable(id)` for each skill
+  in the palette; with no slot free, Pactblade answers "no" for the two skills' VSB ids - the game then shows them
+  greyed out and doesn't let them be used, exactly as with too little stamina.
+- **The HUD:** drawn by the script every frame with REFramework's `draw` functions (circles and 1-pixel strips), no
+  images:
+  - each slot = a dark shadow, a bevelled bronze rim (dark / light / dark circles), a dark see-through core and a violet
+    gem in three shades with a small shine - styled after the game's round icon frames;
+  - ready: a halo that breathes and a light that runs round the rim with a short tail;
+  - used: the gem swells and fades away (0.6 s); recharging: the gem grows back like the **moon's phases** (the lit
+    part of a disk with an elliptic terminator, drawn as thin horizontal strips); refilled: a bloom of light for 1 s;
+  - a press with no slot free: the row flashes red;
+  - hidden in menus; position (3 spots), size and on/off are the player's, saved to `Pactblade_slots.json`.
 
 ---
 
