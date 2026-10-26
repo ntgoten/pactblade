@@ -664,6 +664,28 @@ cast_cancel = function()
     if p and cast and cast.phase ~= "release" then cast_end(p) end
 end
 
+-- a hit reaction while aiming cancels the spell (else the paused animation logic keeps the character in the pose)
+local HIT_ACTIONS = { "^Dmg", "^Caught", "Down", "Blown", "Slam", "Die", "Dead", "Stagger", "Grab" }
+pcall(function()
+    sdk.hook(sdk.find_type_definition("app.ActionManager"):get_method("requestActionCore(app.ActionManager.Priority, System.String, System.UInt32)"),
+        function(args)
+            if state ~= "aiming" and not cast then return end
+            pcall(function()
+                local p = player(); if not p then return end
+                local am = p:get_ActionManager()
+                if not am or sdk.to_int64(args[2]) ~= am:get_address() then return end
+                local name = sdk.to_managed_object(args[4]):ToString()
+                for _, pat in ipairs(HIT_ACTIONS) do
+                    if name:find(pat) then
+                        if state == "aiming" then cancel("interrupted by a hit (" .. name .. ")") else cast_cancel() end
+                        return
+                    end
+                end
+            end)
+        end, function(r) return r end)
+end)
+local lastPlayerAddr = nil
+
 local function start(p)
     if not cast_ray then event("needs _ScriptCore (_SharedCore) - not found"); return end
     state = "aiming"
@@ -1211,6 +1233,17 @@ local keyWasDown = false
 re.on_pre_application_entry("UpdateBehavior", function()
     local ok, err = pcall(function()
         local p = player()
+        -- a new player object (save loaded / back from the title) while aiming: start clean
+        local pAddr = p and p:get_address() or nil
+        if pAddr ~= lastPlayerAddr then
+            if lastPlayerAddr and (state == "aiming" or cast) then
+                pcall(function() pause_fsm(p, false) end); fsmPaused = nil
+                cast, aimLock, castInfo = nil, false, "idle"
+                if state == "aiming" then state, s = nil, nil; pcall(pillar_off) end
+                event("character changed (load) - the cast was reset")
+            end
+            lastPlayerAddr = pAddr
+        end
         if not p then
             if state then cancel("cancelled") end
             end_scene("no player")
@@ -1294,7 +1327,7 @@ function M.draw()
     elseif state == "door" then st = string.format("door open, %.0f ft, %ds left", s.dist / FT, math.floor(s.untilT - os.clock())) end
     if scene then st = "arriving" end
     imgui.text("Now: " .. st .. (cast_ray and "" or "   - _ScriptCore (_SharedCore) MISSING, the spell can't work"))
-    if not M.release and imgui.tree_node("Aiming look (test sliders)") then
+    if not M.release and imgui.tree_node("Aiming look (test sliders)") then   -- (patch_i_008, now built in) no test sliders in release builds
         c, config.aim_cam = imgui.checkbox("camera over the shoulder while aiming", config.aim_cam); changed = changed or c
         c, config.aim_up = imgui.slider_float("camera up (m)", config.aim_up, 0, 3, "%.2f"); changed = changed or c
         c, config.aim_right = imgui.slider_float("camera right (m)", config.aim_right, -2, 2, "%.2f"); changed = changed or c

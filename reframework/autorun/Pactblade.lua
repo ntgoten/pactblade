@@ -6,7 +6,7 @@
 --   * Blast damage = the hit's magick base x Magick Bolt's attack multiplier x the passive's magick bonus x 5 / 10.
 --   * Passive on all your other hits: magick part x1.5 (physical part unchanged).
 -- Nothing is written into the save; Reset scripts or removing the file undoes everything.
-local NAME, VERSION = "Pactblade", "1.1.1"
+local NAME, VERSION = "Pactblade", "1.1.2"
 local DATA = "Pactblade.json"
 -- (1.0) RELEASE (json.RELEASE): the short menu, and of the data files only the ones Pactblade needs are written.
 -- A test build: RELEASE = false below (the full test menu + the debug dumps). (No extra main-chunk locals: 200 max.)
