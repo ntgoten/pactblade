@@ -4,7 +4,7 @@ A custom vocation for Dragon's Dogma 2: a pact-bound swordsman with a fast, magi
 eldritch magick in the other. No shield. Inspired by the D&D 5e warlock (names only).
 
 Pactblade is built on **Vocation & Skill Builder (VSB)** as a Fighter vocation and runs as a REFramework script.
-Play it as Fighter, or as Warfarer with a sword. Version **1.1**.
+Play it as Fighter, or as Warfarer with a sword. Version **1.1.1**.
 
 **Download:** the zip from [Releases](../../releases) - it includes the effect / sound pak, which is not in the source here.
 
@@ -80,6 +80,7 @@ Like a warlock's pact magic: **Eldritch Smite** and **Tasha's Otherworldly Guise
   effect, so an interrupted chant costs none. Renewing an active Guise uses one too.
 - **On the HUD:** a row of circles under the stamina bar - a violet gem when the slot is ready, empty when used, and it
   grows back like the phases of the moon while recharging. The position (3 choices), size and on/off are in the menu.
+  It hides with the game's own HUD (menus, cutscenes, conversations, camp and loading fades).
 
 **Tasha's Otherworldly Guise** (60 s, paused in menus):
 - +20 % Defense and Magick Defense (on the status screen)
@@ -111,6 +112,10 @@ Jump
 
 ## Changelog
 
+**1.1.1**
+- The spell slot display now hides with the game's HUD: in menus, cutscenes, conversations (outside battle), and
+  during the camp, black-screen and loading fades (it used to stay on screen there).
+
 **1.1**
 - Spell slots for Eldritch Smite and Tasha's Otherworldly Guise (1 at level 1, +1 every 15 levels, max 5, 20 s
   recharge each), shown on the HUD; the two skills are greyed out when none is free.
@@ -133,7 +138,7 @@ Jump
 
 ## Settings
 
-REFramework menu (Insert) → Script Generated UI → **Pactblade 1.1**: Nox sword look on/off, arm effect on/off, the spell slot display (on/off, position, size), and
+REFramework menu (Insert) → Script Generated UI → **Pactblade 1.1.1**: Nox sword look on/off, arm effect on/off, the spell slot display (on/off, position, size), and
 **Dimension Door** (on/off, also for other vocations, the key, range, how long a door stays open, the door's look).
 
 ## Safe for your save and online
@@ -154,6 +159,18 @@ folder, `reframework/data/VSB/packs/pactblade`, `pak_mods/Pactblade.pak` and `re
 - When the Guise ends, a faint gold shimmer of its decoy can stay where it ended (gone with the next cast).
 - The chant animations are made for a staff, so the hands are posed for one.
 - Lenient Stagger and Exhaustion: Pactblade triggers Controlled Fall itself; with both installed it may double.
+
+## Credits
+
+- **Capcom** for Dragon's Dogma 2. The effects, animations and most sounds are the game's own, used by ID or as
+  recoloured copies. No game file is replaced.
+- **praydog** for REFramework.
+- **Bloodragon** for _DragonCore and VocationAndSkillBuilder.
+- **SilverEzredes** and **alphaZomega** for _ScriptCore.
+- **Nickesponja** for UDD2P and NickCore, whose scripts showed how to play effects, add animation banks and warp.
+- REE-Lib (effect files), ree-pak-cli (paks), vgmstream (sounds).
+- Built by ntgoten with AI assistance: [Claude Code](https://claude.com/claude-code) and the
+  [universal-modder](https://github.com/rehan-remade/universal-modder) toolkit.
 
 ## How it was made
 

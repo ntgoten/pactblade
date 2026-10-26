@@ -1443,3 +1443,19 @@ Visuals first.
 - 1.1-test: refill flash 1 s (SL.flash: blooming glow + bright gem), moon waxes from the left (user).
 - 1.1-test: slot mechanics: Smite uses a slot at the press (refused + red flash SL.deny when none), Guise needs one free to chant and uses it at gu.release (renewal too; an interrupted chant costs none); isCustomSkillAvailable(+WithoutItemCondition) post = false for the smite / guise VSB ids when none free (player's SkillAvailability only); Guise stamina 25 %, Smite's big drain x0.5 via dbg.stamSwap.mul at part 2.
 - 1.1 user: slots tested OK (gating, refill, cast-only consumption, stamina halves). Default position under the stamina bar. SL.menu() (on / 3 spots / size) in the release + test menu, saved to Pactblade_slots.json (in the release json KEEP list).
+- 1.1 RELEASED 2026-10-25 (spell slots): release/Pactblade-1.1.zip (+Fluffy), GitHub v1.1. Guides: user says DONE - don't touch unless asked (the small 1.1 spell-slot sections stay).
+- (2026-10-26) Will's Mystic Spearhand Kit checked (dd2-research/wills_spearhand_kit): HUD = REFramework draw API like our slots; hides on GuiManager isPausedGUI / IsOpenMainFlowUI / isFixedDispGameMenuUI + PauseManager.isPausedAny (option for our slot HUD if menus show it - user: later, if needed); sounds via an own DLL (dd2_sfx.dll, WAV by a cmd.txt) - user prefers our Wwise-bank way.
+- (2026-10-26) Side project DONE (user: "v2 looks perfect"): DMC5 Dante's Rebellion Combo A ported to DD2 as an
+  animation (dd2-mods/dante-anim, converter tools/mot-tool). User plans Combo A hit 1 + hit 3 for Pactblade later.
+  Full process: dd2-mods/dante-anim/ANIMATION_PORTING.md. Found on the way: ch00_006_atk's 710/712/750 are placeholders
+  resolved via its base list ch00_003_atk.
+- (2026-10-26) Handoff refresh for a new session: HANDOFF.md rewritten for 1.1 (kit, spell slots, build + release
+  procedure, open items); NEW_SESSION.txt (Pactblade + Dante prompts); TECHNIQUES.md + forward-ref check, animation
+  porting, HUD drawing; PACTBLADE_RULES.txt updated to 1.1; fwdref.py / code_index.py moved into src_integrated/tools.
+- (2026-10-26) RESEARCH (user idea): DLC EX skills on swords -> Pactblade EX skills ("Cloudfall Strike on the sword ->
+  Archfey Combo EX + an EX version"). Findings + plan: dd2-research/exskill/FINDINGS.md (StorageData._Ability
+  Slot1..4, ability ids 1-5 = Fighter EX skills, rule = item + level-2 skill equipped, name hooks we already have).
+  Probe ExSkillProbe.lua installed (read-only). Waiting for the user: probe scan, mapping of the other 4 EX abilities,
+  what the EX versions do.
+- (2026-10-26) 1.1.1-test: spell slot HUD visibility like Will's kit (user: slots showed in the camp fade, cutscenes, loading fades): hidden in pause / menus (PauseManager.isPausedAny, GuiManager isPausedGUI / IsOpenMainFlowUI / isFixedDispGameMenuUI), faded with GuiManager <HudAlpha> (every colour x VIS via fc()), hidden in talk scenes (TalkEventManager._IsTalkingManualPlayer) unless BattleManager.get_IsBattleMode. dbg.slots_vis. Also: user tested DD2PakBridge off -> Pactblade works without it (sword visual, no crash); MethodLibrary not used by Pactblade / VSB / DragonCore.
+- (2026-10-26) 1.1.1 user: slots now hide with the HUD (OK). Not released yet (versions_integrated/Pactblade-1.1.1-test.lua = installed, RELEASE true).

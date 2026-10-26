@@ -6,7 +6,7 @@
 --   * Blast damage = the hit's magick base x Magick Bolt's attack multiplier x the passive's magick bonus x 5 / 10.
 --   * Passive on all your other hits: magick part x1.5 (physical part unchanged).
 -- Nothing is written into the save; Reset scripts or removing the file undoes everything.
-local NAME, VERSION = "Pactblade", "1.1"
+local NAME, VERSION = "Pactblade", "1.1.1"
 local DATA = "Pactblade.json"
 -- (1.0) RELEASE (json.RELEASE): the short menu, and of the data files only the ones Pactblade needs are written.
 -- A test build: RELEASE = false below (the full test menu + the debug dumps). (No extra main-chunk locals: 200 max.)
@@ -11406,13 +11406,16 @@ end)()
     local ORBIT = 0xFFE08AF0
     local function alpha(col, a) return (math.floor(math.max(0, math.min(1, a)) * ((col >> 24) & 0xFF)) << 24) | (col & 0xFFFFFF) end
     -- the moon phase: the lit part of a disk of radius g, p 0 (new) .. 1 (full), waxing from the LEFT (user); 1 px strips
+    -- (1.1.1) every colour drawn goes through the HUD visibility VIS (0..1): the slots fade with the game's own HUD
+    local VIS = 1
+    local function fc(x, y, rad, col, seg) draw.filled_circle(x, y, rad, alpha(col, VIS), seg) end
     local function moon(cx, cy, g, p, col)
         local n = math.max(2, math.floor(g))
         for k = -n, n do
             local y = k / n * g
             local half = math.sqrt(math.max(0, g * g - y * y))
             local xt = half * (1 - 2 * p)   -- the terminator (an ellipse across the disk)
-            if half - xt > 0.05 then draw.filled_rect(cx - half, cy + y - g / n * 0.5, half - xt, g / n + 0.6, col) end
+            if half - xt > 0.05 then draw.filled_rect(cx - half, cy + y - g / n * 0.5, half - xt, g / n + 0.6, alpha(col, VIS)) end
         end
     end
     local function screen_size()
@@ -11420,16 +11423,44 @@ end)()
         pcall(function() local v = imgui.get_display_size(); if v and v.x > 0 then w, h = v.x, v.y end end)
         return w, h
     end
+    -- (1.1.1, user: the slots showed during the camp fade, cutscenes, loading fades) visibility like Will's Mystic
+    -- Spearhand Kit (dd2-research/wills_spearhand_kit): hidden in any pause / menu (PauseManager.isPausedAny, GuiManager
+    -- isPausedGUI / IsOpenMainFlowUI / isFixedDispGameMenuUI), faded with the game's HUD (GuiManager <HudAlpha>: camp,
+    -- cutscenes, black screens, loading), hidden in talk / event scenes (TalkEventManager._IsTalkingManualPlayer) unless
+    -- in battle (bosses talk mid-fight). _HideHudBit NOT used (Will: it stays set after the HUD is back).
     local function paused()
         local p = false
-        pcall(function() local gm = sdk.get_managed_singleton("app.GuiManager"); if gm and gm:call("isPausedGUI") then p = true end end)
+        pcall(function() p = sdk.get_managed_singleton("app.PauseManager"):call("isPausedAny") == true end)
+        if not p then pcall(function()
+            local gm = sdk.get_managed_singleton("app.GuiManager")
+            p = gm:call("isPausedGUI") == true or gm:call("IsOpenMainFlowUI") == true or gm:call("isFixedDispGameMenuUI") == true
+        end) end
         return p
     end
+    local function hud_vis()
+        if paused() then return 0 end
+        local v = 1
+        pcall(function()
+            local ha = sdk.get_managed_singleton("app.GuiManager"):get_field("<HudAlpha>k__BackingField")
+            if type(ha) == "number" then v = math.max(0, math.min(1, ha)) end
+        end)
+        pcall(function()
+            if sdk.get_managed_singleton("app.TalkEventManager"):get_field("_IsTalkingManualPlayer") == true then
+                local battle = false
+                pcall(function() battle = sdk.get_managed_singleton("app.BattleManager"):call("get_IsBattleMode") == true end)
+                if not battle then v = 0 end
+            end
+        end)
+        return v
+    end
+    dbg.slots_vis = hud_vis
     re.on_frame(function()
         if not live.on then return end
         SL.refresh()
         tick()
-        if not SL.show or paused() then return end
+        if not SL.show then return end
+        VIS = hud_vis()
+        if VIS <= 0.01 then return end
         pcall(function()
             local w, h = screen_size()
             local r = h * 0.0095 * SL.size
@@ -11441,24 +11472,24 @@ end)()
             local deny = SL.deniedAt and (os.clock() - SL.deniedAt) / 0.5 or 1
             for i = 1, SL.max do
                 local cx, cy = x0 + (i - 1) * r * SL.gap, y0
-                if deny < 1 then draw.filled_circle(cx, cy, r * 1.45, alpha(0xC02020E0, 1 - deny), 40) end   -- no slot free: red
+                if deny < 1 then fc(cx, cy, r * 1.45, alpha(0xC02020E0, 1 - deny), 40) end   -- no slot free: red
                 local full = i <= free
                 local k = full and 1 or ((i == free + 1 and SL.rechargeAt) and prog or 0)
                 local now = os.clock()
                 local breathe = 0.65 + 0.35 * math.sin(now * 2.2 + i * 1.3)
-                if full then draw.filled_circle(cx, cy, r * (1.38 + 0.10 * breathe), alpha(GLOW, breathe), 40) end   -- breathing halo
-                draw.filled_circle(cx, cy, r * 1.14, SHADOW, 40)
-                draw.filled_circle(cx, cy, r, RIM_DARK, 40)              -- the engraved rim: dark - light - dark
-                draw.filled_circle(cx, cy, r * 0.88, RIM_LIGHT, 40)
-                draw.filled_circle(cx, cy, r * 0.78, RIM_INNER, 40)
-                draw.filled_circle(cx, cy, r * 0.71, CORE, 40)           -- the dark core
+                if full then fc(cx, cy, r * (1.38 + 0.10 * breathe), alpha(GLOW, breathe), 40) end   -- breathing halo
+                fc(cx, cy, r * 1.14, SHADOW, 40)
+                fc(cx, cy, r, RIM_DARK, 40)              -- the engraved rim: dark - light - dark
+                fc(cx, cy, r * 0.88, RIM_LIGHT, 40)
+                fc(cx, cy, r * 0.78, RIM_INNER, 40)
+                fc(cx, cy, r * 0.71, CORE, 40)           -- the dark core
                 if full then
-                    for _, g in ipairs(GEM) do draw.filled_circle(cx, cy, r * g[1], g[2], 40) end
-                    draw.filled_circle(cx - r * 0.20, cy - r * 0.22, r * 0.13, SHINE, 20)
+                    for _, g in ipairs(GEM) do fc(cx, cy, r * g[1], g[2], 40) end
+                    fc(cx - r * 0.20, cy - r * 0.22, r * 0.13, SHINE, 20)
                     local ang = now * 2.4 + i * 1.9                      -- a light running round the rim, with a tail
                     for t = 0, 4 do
                         local a2 = ang - t * 0.22
-                        draw.filled_circle(cx + math.cos(a2) * r * 0.86, cy + math.sin(a2) * r * 0.86, r * (0.16 - t * 0.025), alpha(ORBIT, 1 - t * 0.2), 16)
+                        fc(cx + math.cos(a2) * r * 0.86, cy + math.sin(a2) * r * 0.86, r * (0.16 - t * 0.025), alpha(ORBIT, 1 - t * 0.2), 16)
                     end
                 elseif k > 0 then                                        -- recharging: the moon's phases
                     for _, g in ipairs(GEM) do moon(cx, cy, r * g[1], k, g[2]) end
@@ -11468,9 +11499,9 @@ end)()
                     local t = (now - fl.t0) / 1.0
                     if t >= 1 then SL.flash = nil
                     else
-                        draw.filled_circle(cx, cy, r * (1.2 + 1.0 * t), alpha(0x66E08AF0, 1 - t), 40)
-                        draw.filled_circle(cx, cy, r * (1.1 + 0.5 * t), alpha(0x88F2B3D9, 1 - t), 40)
-                        draw.filled_circle(cx, cy, r * 0.62, alpha(0xFFF2C8F5, (1 - t) * 0.8), 40)   -- the gem shining bright
+                        fc(cx, cy, r * (1.2 + 1.0 * t), alpha(0x66E08AF0, 1 - t), 40)
+                        fc(cx, cy, r * (1.1 + 0.5 * t), alpha(0x88F2B3D9, 1 - t), 40)
+                        fc(cx, cy, r * 0.62, alpha(0xFFF2C8F5, (1 - t) * 0.8), 40)   -- the gem shining bright
                     end
                 end
                 local f = SL.fade
@@ -11478,7 +11509,7 @@ end)()
                     local t = (now - f.t0) / 0.6
                     if t >= 1 then SL.fade = nil
                     else
-                        for _, g in ipairs(GEM) do draw.filled_circle(cx, cy, r * g[1] * (1 + 0.45 * t), alpha(g[2], 1 - t), 40) end
+                        for _, g in ipairs(GEM) do fc(cx, cy, r * g[1] * (1 + 0.45 * t), alpha(g[2], 1 - t), 40) end
                     end
                 end
             end
