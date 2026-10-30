@@ -4,7 +4,7 @@ A custom vocation for Dragon's Dogma 2: a pact-bound swordsman with a fast, magi
 eldritch magick in the other. No shield. Inspired by the D&D 5e warlock (names only).
 
 Pactblade is built on **Vocation & Skill Builder (VSB)** as a Fighter vocation and runs as a REFramework script.
-Play it as Fighter, or as Warfarer with a sword. Version **1.3**.
+Play it as Fighter, or as Warfarer with a sword. Version **1.3.1**.
 
 **Download:** the zip from [Releases](../../releases) - it includes the effect / sound pak, which is not in the source here.
 
@@ -73,7 +73,7 @@ the skill). A hit strong enough to make you flinch or fall interrupts a chant (C
 
 ## EX skills
 
-Three skills get an **EX version** when your sword carries the matching **special skill** (from appraisal) and the
+Four skills get an **EX version** when your sword carries the matching **special skill** (from appraisal) and the
 skill is learned at **level 2** - the game's own EX rule. The sword's special skill then shows the EX name in the item
 screens, and the skill's name gets "EX".
 
@@ -82,6 +82,7 @@ screens, and the skill's name gets "EX".
 | Archfey Combo EX | Cloudfall Strike | After the opening teleports: a kick and backflip, a sliding cut past the enemy, then the falling strike. |
 | Eldritch Slash EX | Plenilune Slash | A vertical cut with its wave; the swing slows down for a moment - press again for a second, horizontal cut with a flat wave and a sword twirl. No second press: back to idle. Real sword hits. |
 | Tasha's Caustic Brew EX | Tornadic Strike | Moments after the acid lands, the whole stream bursts into flame from end to end and sets foes on fire. Uses a **spell slot** (no slot free: the acid only). |
+| Misty Strike EX | Eviscerating Skewer | When the strike hits, press the skill again to vanish: foes lose track of you and you turn see-through with a faint glowing outline, until your next attack (or 10 s). Drains a little stamina while hidden. |
 
 ## Spell slots
 
@@ -123,6 +124,10 @@ Jump
 ```
 
 ## Changelog
+
+**1.3.1**
+- New: **Misty Strike EX** (sword special skill Eviscerating Skewer + Misty Strike at level 2): when the strike hits,
+  press the skill again within 1.5 s to vanish - foes lose track of you until your next attack.
 
 **1.3**
 - New: **EX skills** - Archfey Combo EX, Eldritch Slash EX and Tasha's Caustic Brew EX (see "EX skills").
@@ -175,7 +180,7 @@ Jump
 
 ## Settings
 
-REFramework menu (Insert) → Script Generated UI → **Pactblade 1.3**: Nox sword look on/off, arm effect on/off, the spell slot display (on/off, position, size), and
+REFramework menu (Insert) → Script Generated UI → **Pactblade 1.3.1**: Nox sword look on/off, arm effect on/off, the spell slot display (on/off, position, size), and
 **Dimension Door** (on/off, also for other vocations, the key, range, how long a door stays open, the door's look).
 
 ## Safe for your save and online
